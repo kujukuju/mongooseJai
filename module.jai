@@ -1,5 +1,3 @@
-HELPERS :: true;
-
 MG_MAX_HTTP_HEADERS :: 40;
 
 MG_EV_ERROR :: 0;
@@ -165,6 +163,8 @@ mg_ncasecmp :: (s1: *u8, s2: *u8, len: u64) -> s32 #foreign mongoose;
 }
 
 #scope_file
+
+HELPERS :: true;
 
 #if OS == .WINDOWS {
     mongoose :: #foreign_library "bin/win/mongoose";

@@ -16,6 +16,9 @@ include_directories(. src)
 add_library(mongoose
     mongoose.c)
 
+if(WIN32)
+    target_link_libraries(mongoose wsock32 ws2_32)
+endif()
 # if(WIN32)
 # 	# target_link_libraries(ws pthread ws2_32 -static)
 #     message("not sure what to do for windows")

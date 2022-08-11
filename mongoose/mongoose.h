@@ -20,6 +20,8 @@
 #ifndef MONGOOSE_H
 #define MONGOOSE_H
 
+#define EXPORT __declspec(dllexport)
+
 #define MG_VERSION "7.6"
 
 #ifdef __cplusplus
@@ -579,11 +581,11 @@ struct mg_str {
 // Using macro to avoid shadowing C++ struct constructor, see #1298
 #define mg_str(s) mg_str_s(s)
 
-struct mg_str mg_str(const char *s);
+EXPORT struct mg_str mg_str(const char *s);
 struct mg_str mg_str_n(const char *s, size_t n);
 int mg_lower(const char *s);
-int mg_ncasecmp(const char *s1, const char *s2, size_t len);
-int mg_casecmp(const char *s1, const char *s2);
+EXPORT int mg_ncasecmp(const char *s1, const char *s2, size_t len);
+EXPORT int mg_casecmp(const char *s1, const char *s2);
 int mg_vcmp(const struct mg_str *s1, const char *s2);
 int mg_vcasecmp(const struct mg_str *str1, const char *str2);
 int mg_strcmp(const struct mg_str str1, const struct mg_str str2);
@@ -613,7 +615,7 @@ size_t mg_lld(char *buf, int64_t val, bool is_signed, bool is_hex);
 enum { MG_LL_NONE, MG_LL_ERROR, MG_LL_INFO, MG_LL_DEBUG, MG_LL_VERBOSE };
 void mg_log(const char *fmt, ...) PRINTF_LIKE(1, 2);
 bool mg_log_prefix(int ll, const char *file, int line, const char *fname);
-void mg_log_set(const char *spec);
+EXPORT void mg_log_set(const char *spec);
 void mg_log_set_callback(void (*fn)(const void *, size_t, void *), void *param);
 
 // Let the compiler always see the log invocation in order to check parameters
@@ -904,9 +906,9 @@ struct mg_connection {
   unsigned is_writable : 1;    // Connection is ready to write
 };
 
-void mg_mgr_poll(struct mg_mgr *, int ms);
-void mg_mgr_init(struct mg_mgr *);
-void mg_mgr_free(struct mg_mgr *);
+EXPORT void mg_mgr_poll(struct mg_mgr *, int ms);
+EXPORT void mg_mgr_init(struct mg_mgr *);
+EXPORT void mg_mgr_free(struct mg_mgr *);
 
 struct mg_connection *mg_listen(struct mg_mgr *, const char *url,
                                 mg_event_handler_t fn, void *fn_data);
@@ -965,32 +967,32 @@ struct mg_http_part {
   struct mg_str body;      // Part contents
 };
 
-int mg_http_parse(const char *s, size_t len, struct mg_http_message *);
+EXPORT int mg_http_parse(const char *s, size_t len, struct mg_http_message *);
 int mg_http_get_request_len(const unsigned char *buf, size_t buf_len);
 void mg_http_printf_chunk(struct mg_connection *cnn, const char *fmt, ...);
 void mg_http_write_chunk(struct mg_connection *c, const char *buf, size_t len);
 void mg_http_delete_chunk(struct mg_connection *c, struct mg_http_message *hm);
-struct mg_connection *mg_http_listen(struct mg_mgr *, const char *url,
+EXPORT struct mg_connection *mg_http_listen(struct mg_mgr *, const char *url,
                                      mg_event_handler_t fn, void *fn_data);
 struct mg_connection *mg_http_connect(struct mg_mgr *, const char *url,
                                       mg_event_handler_t fn, void *fn_data);
-void mg_http_serve_dir(struct mg_connection *, struct mg_http_message *hm,
+EXPORT void mg_http_serve_dir(struct mg_connection *, struct mg_http_message *hm,
                        struct mg_http_serve_opts *opts);
-void mg_http_serve_file(struct mg_connection *, struct mg_http_message *hm,
+EXPORT void mg_http_serve_file(struct mg_connection *, struct mg_http_message *hm,
                         const char *path, struct mg_http_serve_opts *opts);
-void mg_http_reply(struct mg_connection *, int status_code, const char *headers,
+EXPORT void mg_http_reply(struct mg_connection *, int status_code, const char *headers,
                    const char *body_fmt, ...);
-struct mg_str *mg_http_get_header(struct mg_http_message *, const char *name);
-int mg_http_get_var(const struct mg_str *, const char *name, char *, size_t);
+EXPORT struct mg_str *mg_http_get_header(struct mg_http_message *, const char *name);
+EXPORT int mg_http_get_var(const struct mg_str *, const char *name, char *, size_t);
 int mg_url_decode(const char *s, size_t n, char *to, size_t to_len, int form);
 size_t mg_url_encode(const char *s, size_t n, char *buf, size_t len);
 void mg_http_creds(struct mg_http_message *, char *, size_t, char *, size_t);
-bool mg_http_match_uri(const struct mg_http_message *, const char *glob);
+EXPORT bool mg_http_match_uri(const struct mg_http_message *, const char *glob);
 int mg_http_upload(struct mg_connection *, struct mg_http_message *hm,
                    struct mg_fs *fs, const char *dir);
 void mg_http_bauth(struct mg_connection *, const char *user, const char *pass);
 struct mg_str mg_http_get_header_var(struct mg_str s, struct mg_str v);
-size_t mg_http_next_multipart(struct mg_str, size_t, struct mg_http_part *);
+EXPORT size_t mg_http_next_multipart(struct mg_str, size_t, struct mg_http_part *);
 int mg_http_status(const struct mg_http_message *hm);
 
 
@@ -1012,8 +1014,8 @@ struct mg_tls_opts {
   struct mg_fs *fs;       // FS API for reading certificate files
 };
 
-void mg_tls_init(struct mg_connection *, struct mg_tls_opts *);
-void mg_tls_free(struct mg_connection *);
+EXPORT void mg_tls_init(struct mg_connection *, struct mg_tls_opts *);
+EXPORT void mg_tls_free(struct mg_connection *);
 long mg_tls_send(struct mg_connection *, const void *buf, size_t len);
 long mg_tls_recv(struct mg_connection *, void *buf, size_t len);
 void mg_tls_handshake(struct mg_connection *);

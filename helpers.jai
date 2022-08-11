@@ -23,6 +23,21 @@ mg_http_endpoint_start :: (port: u32, interval: s32 = 50) {
     mg_mgr_free(*mgr);
 }
 
+mg_http_static_start :: (path: *u8, port: u32, interval: s32 = 50) {
+    url := sprint("http://localhost:%", port);
+    defer free(url);
+    url_c := to_c_string(url);
+    defer free(url_c);
+
+    mgr: mg_mgr;
+    mg_mgr_init(*mgr);
+    mg_http_listen(*mgr, url_c, mg_static_callback, null);
+    while true {
+        mg_mgr_poll(*mgr, interval);
+    }
+    mg_mgr_free(*mgr);
+}
+
 // doesn't require freeing the result
 mg_form_value :: (hm: *mg_http_message, key: *u8) -> bool, string {
     mg_key_str := mg_str_s(key);
@@ -78,6 +93,17 @@ mg_callback :: (conn: *mg_connection, ev: s32, ev_data: *void, fn_data: *void) #
             }
 
             mg_http_reply(conn, 404, "", "%s", "Not found");
+        }
+    }
+}
+
+mg_static_callback :: (conn: *mg_connection, ev: s32, ev_data: *void, fn_data: *void) #c_call {
+    push_context mg_context {
+        if ev == MG_EV_HTTP_MSG {
+            opts: mg_http_serve_opts = .{root_dir = "."};
+            hm := cast(*mg_http_message) ev_data;
+
+            mg_http_serve_dir(conn, hm, *opts);
         }
     }
 }
