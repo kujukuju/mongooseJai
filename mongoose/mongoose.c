@@ -1432,6 +1432,7 @@ static struct mg_str guess_content_type(struct mg_str path, const char *extra) {
       MG_C_STR("webp"), MG_C_STR("image/webp"),
       MG_C_STR("zip"), MG_C_STR("application/zip"),
       MG_C_STR("3gp"), MG_C_STR("video/3gpp"),
+      MG_C_STR("wasm"), MG_C_STR("application/wasm"),
       {0, 0},
   };
   // clang-format on

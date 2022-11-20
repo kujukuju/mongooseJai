@@ -20,7 +20,11 @@
 #ifndef MONGOOSE_H
 #define MONGOOSE_H
 
+#if defined(_WIN32)
 #define EXPORT __declspec(dllexport)
+#else
+#define EXPORT
+#endif
 
 #define MG_VERSION "7.6"
 
