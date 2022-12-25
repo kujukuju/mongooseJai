@@ -20,6 +20,13 @@ MG_EV_MQTT_OPEN :: 16;
 MG_EV_SNTP_TIME :: 17;
 MG_EV_USER :: 18;
 
+WEBSOCKET_OP_CONTINUE :: 0;
+WEBSOCKET_OP_TEXT :: 1;
+WEBSOCKET_OP_BINARY :: 2;
+WEBSOCKET_OP_CLOSE :: 8;
+WEBSOCKET_OP_PING :: 9;
+WEBSOCKET_OP_PONG :: 10;
+
 mg_mgr :: struct {
     conns: *mg_connection;
     dns4: mg_dns;
@@ -137,6 +144,11 @@ mg_http_part :: struct {
     body: mg_str;
 }
 
+mg_ws_message :: struct {
+  data: mg_str;
+  flags: u8;
+}
+
 mg_event_handler_t :: #type (conn: *mg_connection, ev: s32, ev_data: *void, fn_data: *void) #c_call;
 
 mg_log_set :: (spec: *u8) -> void #foreign mongoose;
@@ -157,6 +169,10 @@ mg_http_match_uri :: (hm: *mg_http_message, glob: *u8) -> bool #foreign mongoose
 mg_http_reply :: (conn: *mg_connection, status_code: s32, headers: *u8, body_fmt: *u8, args: .. Any) -> void #foreign mongoose;
 mg_str_s :: (s: *u8) -> mg_str #foreign mongoose;
 mg_ncasecmp :: (s1: *u8, s2: *u8, len: u64) -> s32 #foreign mongoose;
+mg_ws_connect :: (mgr: *mg_mgr, url: *u8, fn: mg_event_handler_t, fn_data: *void, fmt: *u8, args: .. Any) -> *mg_connection #foreign mongoose;
+mg_ws_upgrade :: (conn: *mg_connection, hm: *mg_http_message, fmt: *u8, args: .. Any) -> void #foreign mongoose;
+mg_ws_send :: (conn: *mg_connection, buf: *u8, buflen: u64, op: s32) -> u64 #foreign mongoose;
+mg_ws_wrap :: (conn: *mg_connection, len: u64, op: s32) -> u64 #foreign mongoose;
 
 #if HELPERS {
     #load "helpers.jai";

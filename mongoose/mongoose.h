@@ -1073,14 +1073,13 @@ struct mg_ws_message {
   uint8_t flags;       // Websocket message flags
 };
 
-struct mg_connection *mg_ws_connect(struct mg_mgr *, const char *url,
+EXPORT struct mg_connection *mg_ws_connect(struct mg_mgr *, const char *url,
                                     mg_event_handler_t fn, void *fn_data,
                                     const char *fmt, ...);
-void mg_ws_upgrade(struct mg_connection *, struct mg_http_message *,
+EXPORT void mg_ws_upgrade(struct mg_connection *, struct mg_http_message *,
                    const char *fmt, ...);
-size_t mg_ws_send(struct mg_connection *, const char *buf, size_t len, int op);
-size_t mg_ws_wrap(struct mg_connection *, size_t len, int op);
-
+EXPORT size_t mg_ws_send(struct mg_connection *, const char *buf, size_t len, int op);
+EXPORT size_t mg_ws_wrap(struct mg_connection *, size_t len, int op);
 
 
 
