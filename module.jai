@@ -41,10 +41,10 @@ mg_connection :: struct {
     mgr: *mg_mgr;
     loc: mg_addr;
     rem: mg_addr;
-    fd: *void;
-    id: u64;
-    recv: mg_iobuf;
-    send: mg_iobuf;
+    fd: *void; // 8
+    id: u64; // 8
+    recv: mg_iobuf; // 24
+    send: mg_iobuf; // 24
     fn: mg_event_handler_t;
     fn_data: *void;
     pfn: mg_event_handler_t;
@@ -174,13 +174,19 @@ mg_ws_upgrade :: (conn: *mg_connection, hm: *mg_http_message, fmt: *u8, args: ..
 mg_ws_send :: (conn: *mg_connection, buf: *u8, buflen: u64, op: s32) -> u64 #foreign mongoose;
 mg_ws_wrap :: (conn: *mg_connection, len: u64, op: s32) -> u64 #foreign mongoose;
 
+
 #if HELPERS {
     #load "helpers.jai";
 }
 
-#scope_file
+#scope_module
 
 HELPERS :: true;
+WASM :: true;
+
+#if WASM {
+    #run assert(size_of(mg_connection) == 288, "The connection size is assumed to be 288. Please correct the allocation size in jai.js mg_connect.");
+}
 
 #if OS == .WINDOWS {
     mongoose :: #foreign_library "bin/win/mongoose";

@@ -381,13 +381,21 @@ mg_static_callback :: (conn: *mg_connection, ev: s32, ev_data: *void, fn_data: *
 array_add_bytes :: (array: *[..] u8, to_append: [] u8) {
     // returns the next power of 2 >= the current number
     next_power_of_two :: inline (v: int) -> int {
-        result: s64 = ---;
-        v -= 1;
         // count leading zeros
-        #asm {
-            lzcnt result, v;
+        #if WASM {
+            p := 1;
+            while p < v {
+                p += p;
+            }
+            return p;
+        } else {
+            result: s64 = ---;
+            v -= 1;
+            #asm {
+                lzcnt result, v;
+            }
+            return 1 << (64 - result);
         }
-        return 1 << (64 - result);
     }
 
     old_count := array.count;
