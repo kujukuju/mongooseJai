@@ -1,3 +1,5 @@
+#module_parameters(WASM := false);
+
 MG_MAX_HTTP_HEADERS :: 40;
 
 MG_EV_ERROR :: 0;
@@ -174,18 +176,11 @@ mg_ws_upgrade :: (conn: *mg_connection, hm: *mg_http_message, fmt: *u8, args: ..
 mg_ws_send :: (conn: *mg_connection, buf: *u8, buflen: u64, op: s32) -> u64 #foreign mongoose;
 mg_ws_wrap :: (conn: *mg_connection, len: u64, op: s32) -> u64 #foreign mongoose;
 
-
-#if HELPERS {
-    #load "helpers.jai";
-}
-
 #scope_module
-
-HELPERS :: true;
-WASM :: true;
 
 #if WASM {
     #run assert(size_of(mg_connection) == 288, "The connection size is assumed to be 288. Please correct the allocation size in jai.js mg_connect.");
+    // TODO do other things that wasm assumes to be true
 }
 
 #if OS == .WINDOWS {
