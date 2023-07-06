@@ -571,7 +571,7 @@ typedef int socklen_t;
 
 
 
-struct mg_str {
+EXPORT struct mg_str {
   const char *ptr;  // Pointer to string data
   size_t len;       // String len
 };
@@ -586,41 +586,41 @@ struct mg_str {
 #define mg_str(s) mg_str_s(s)
 
 EXPORT struct mg_str mg_str(const char *s);
-struct mg_str mg_str_n(const char *s, size_t n);
-int mg_lower(const char *s);
+EXPORT struct mg_str mg_str_n(const char *s, size_t n);
+EXPORT int mg_lower(const char *s);
 EXPORT int mg_ncasecmp(const char *s1, const char *s2, size_t len);
 EXPORT int mg_casecmp(const char *s1, const char *s2);
-int mg_vcmp(const struct mg_str *s1, const char *s2);
-int mg_vcasecmp(const struct mg_str *str1, const char *str2);
-int mg_strcmp(const struct mg_str str1, const struct mg_str str2);
-struct mg_str mg_strstrip(struct mg_str s);
-struct mg_str mg_strdup(const struct mg_str s);
-const char *mg_strstr(const struct mg_str haystack, const struct mg_str needle);
-bool mg_match(struct mg_str str, struct mg_str pattern, struct mg_str *caps);
-bool mg_globmatch(const char *pattern, size_t plen, const char *s, size_t n);
-bool mg_commalist(struct mg_str *s, struct mg_str *k, struct mg_str *v);
-bool mg_commalist(struct mg_str *s, struct mg_str *k, struct mg_str *v);
-size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list ap);
-size_t mg_snprintf(char *, size_t, const char *fmt, ...) PRINTF_LIKE(3, 4);
-char *mg_hexdump(const void *buf, size_t len);
-char *mg_hex(const void *buf, size_t len, char *dst);
-void mg_unhex(const char *buf, size_t len, unsigned char *to);
-unsigned long mg_unhexn(const char *s, size_t len);
-size_t mg_asprintf(char **, size_t, const char *fmt, ...) PRINTF_LIKE(3, 4);
-size_t mg_vasprintf(char **buf, size_t size, const char *fmt, va_list ap);
-int mg_check_ip_acl(struct mg_str acl, uint32_t remote_ip);
-int64_t mg_to64(struct mg_str str);
-size_t mg_lld(char *buf, int64_t val, bool is_signed, bool is_hex);
+EXPORT int mg_vcmp(const struct mg_str *s1, const char *s2);
+EXPORT int mg_vcasecmp(const struct mg_str *str1, const char *str2);
+EXPORT int mg_strcmp(const struct mg_str str1, const struct mg_str str2);
+EXPORT struct mg_str mg_strstrip(struct mg_str s);
+EXPORT struct mg_str mg_strdup(const struct mg_str s);
+EXPORT const char *mg_strstr(const struct mg_str haystack, const struct mg_str needle);
+EXPORT bool mg_match(struct mg_str str, struct mg_str pattern, struct mg_str *caps);
+EXPORT bool mg_globmatch(const char *pattern, size_t plen, const char *s, size_t n);
+EXPORT bool mg_commalist(struct mg_str *s, struct mg_str *k, struct mg_str *v);
+EXPORT bool mg_commalist(struct mg_str *s, struct mg_str *k, struct mg_str *v);
+EXPORT size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list ap);
+EXPORT size_t mg_snprintf(char *, size_t, const char *fmt, ...) PRINTF_LIKE(3, 4);
+EXPORT char *mg_hexdump(const void *buf, size_t len);
+EXPORT char *mg_hex(const void *buf, size_t len, char *dst);
+EXPORT void mg_unhex(const char *buf, size_t len, unsigned char *to);
+EXPORT unsigned long mg_unhexn(const char *s, size_t len);
+EXPORT size_t mg_asprintf(char **, size_t, const char *fmt, ...) PRINTF_LIKE(3, 4);
+EXPORT size_t mg_vasprintf(char **buf, size_t size, const char *fmt, va_list ap);
+EXPORT int mg_check_ip_acl(struct mg_str acl, uint32_t remote_ip);
+EXPORT int64_t mg_to64(struct mg_str str);
+EXPORT size_t mg_lld(char *buf, int64_t val, bool is_signed, bool is_hex);
 
 
 
 
 
-enum { MG_LL_NONE, MG_LL_ERROR, MG_LL_INFO, MG_LL_DEBUG, MG_LL_VERBOSE };
-void mg_log(const char *fmt, ...) PRINTF_LIKE(1, 2);
-bool mg_log_prefix(int ll, const char *file, int line, const char *fname);
+EXPORT enum { MG_LL_NONE, MG_LL_ERROR, MG_LL_INFO, MG_LL_DEBUG, MG_LL_VERBOSE };
+EXPORT void mg_log(const char *fmt, ...) PRINTF_LIKE(1, 2);
+EXPORT bool mg_log_prefix(int ll, const char *file, int line, const char *fname);
 EXPORT void mg_log_set(const char *spec);
-void mg_log_set_callback(void (*fn)(const void *, size_t, void *), void *param);
+EXPORT void mg_log_set_callback(void (*fn)(const void *, size_t, void *), void *param);
 
 // Let the compiler always see the log invocation in order to check parameters
 // For MG_ENABLE_LOG=0 case, the call will be optimised out, anyway
@@ -650,7 +650,7 @@ void mg_log_set_callback(void (*fn)(const void *, size_t, void *), void *param);
 
 
 
-struct mg_timer {
+EXPORT struct mg_timer {
   int64_t period_ms;        // Timer period in milliseconds
   int64_t expire;           // Expiration timestamp in milliseconds
   unsigned flags;           // Possible flags values below
@@ -661,18 +661,18 @@ struct mg_timer {
   struct mg_timer *next;    // Linkage in g_timers list
 };
 
-extern struct mg_timer *g_timers;  // Global list of timers
+EXPORT extern struct mg_timer *g_timers;  // Global list of timers
 
-void mg_timer_init(struct mg_timer *, int64_t, unsigned, void (*)(void *),
+EXPORT void mg_timer_init(struct mg_timer *, int64_t, unsigned, void (*)(void *),
                    void *);
-void mg_timer_free(struct mg_timer *);
-void mg_timer_poll(int64_t current_time_ms);
+EXPORT void mg_timer_free(struct mg_timer *);
+EXPORT void mg_timer_poll(int64_t current_time_ms);
 
 
 
 
 
-enum { MG_FS_READ = 1, MG_FS_WRITE = 2, MG_FS_DIR = 4 };
+EXPORT enum { MG_FS_READ = 1, MG_FS_WRITE = 2, MG_FS_DIR = 4 };
 
 // Filesystem API functions
 // st() returns MG_FS_* flags and populates file size and modification time
@@ -681,7 +681,7 @@ enum { MG_FS_READ = 1, MG_FS_WRITE = 2, MG_FS_DIR = 4 };
 // NOTE: UNIX-style shorthand names for the API functions are deliberately
 // chosen to avoid conflicts with some libraries that make macros for e.g.
 // stat(), write(), read() calls.
-struct mg_fs {
+EXPORT struct mg_fs {
   int (*st)(const char *path, size_t *size, time_t *mtime);  // stat file
   void (*ls)(const char *path, void (*fn)(const char *, void *), void *);
   void *(*op)(const char *path, int flags);             // Open file
@@ -694,32 +694,32 @@ struct mg_fs {
   bool (*mkd)(const char *path);                        // Create directory
 };
 
-extern struct mg_fs mg_fs_posix;   // POSIX open/close/read/write/seek
-extern struct mg_fs mg_fs_packed;  // Packed FS, see examples/complete
-extern struct mg_fs mg_fs_fat;     // FAT FS
+EXPORT extern struct mg_fs mg_fs_posix;   // POSIX open/close/read/write/seek
+EXPORT extern struct mg_fs mg_fs_packed;  // Packed FS, see examples/complete
+EXPORT extern struct mg_fs mg_fs_fat;     // FAT FS
 
 // File descriptor
-struct mg_fd {
+EXPORT struct mg_fd {
   void *fd;
   struct mg_fs *fs;
 };
 
-struct mg_fd *mg_fs_open(struct mg_fs *fs, const char *path, int flags);
-void mg_fs_close(struct mg_fd *fd);
-char *mg_file_read(struct mg_fs *fs, const char *path, size_t *size);
-bool mg_file_write(struct mg_fs *fs, const char *path, const void *, size_t);
-bool mg_file_printf(struct mg_fs *fs, const char *path, const char *fmt, ...);
+EXPORT struct mg_fd *mg_fs_open(struct mg_fs *fs, const char *path, int flags);
+EXPORT void mg_fs_close(struct mg_fd *fd);
+EXPORT char *mg_file_read(struct mg_fs *fs, const char *path, size_t *size);
+EXPORT bool mg_file_write(struct mg_fs *fs, const char *path, const void *, size_t);
+EXPORT bool mg_file_printf(struct mg_fs *fs, const char *path, const char *fmt, ...);
 
 
 
 
 
 
-void mg_random(void *buf, size_t len);
-uint16_t mg_ntohs(uint16_t net);
-uint32_t mg_ntohl(uint32_t net);
-uint32_t mg_crc32(uint32_t crc, const char *buf, size_t len);
-int64_t mg_millis(void);
+EXPORT void mg_random(void *buf, size_t len);
+EXPORT uint16_t mg_ntohs(uint16_t net);
+EXPORT uint32_t mg_ntohl(uint32_t net);
+EXPORT uint32_t mg_crc32(uint32_t crc, const char *buf, size_t len);
+EXPORT int64_t mg_millis(void);
 
 #define mg_htons(x) mg_ntohs(x)
 #define mg_htonl(x) mg_ntohl(x)
@@ -767,67 +767,67 @@ int64_t mg_millis(void);
 
 
 
-unsigned short mg_url_port(const char *url);
-int mg_url_is_ssl(const char *url);
-struct mg_str mg_url_host(const char *url);
-struct mg_str mg_url_user(const char *url);
-struct mg_str mg_url_pass(const char *url);
-const char *mg_url_uri(const char *url);
+EXPORT unsigned short mg_url_port(const char *url);
+EXPORT int mg_url_is_ssl(const char *url);
+EXPORT struct mg_str mg_url_host(const char *url);
+EXPORT struct mg_str mg_url_user(const char *url);
+EXPORT struct mg_str mg_url_pass(const char *url);
+EXPORT const char *mg_url_uri(const char *url);
 
 
 #include <stddef.h>
 
-struct mg_iobuf {
+EXPORT struct mg_iobuf {
   unsigned char *buf;  // Pointer to stored data
   size_t size;         // Total size available
   size_t len;          // Current number of bytes
 };
 
-int mg_iobuf_init(struct mg_iobuf *, size_t);
-int mg_iobuf_resize(struct mg_iobuf *, size_t);
-void mg_iobuf_free(struct mg_iobuf *);
-size_t mg_iobuf_add(struct mg_iobuf *, size_t, const void *, size_t, size_t);
-size_t mg_iobuf_del(struct mg_iobuf *, size_t ofs, size_t len);
+EXPORT int mg_iobuf_init(struct mg_iobuf *, size_t);
+EXPORT int mg_iobuf_resize(struct mg_iobuf *, size_t);
+EXPORT void mg_iobuf_free(struct mg_iobuf *);
+EXPORT size_t mg_iobuf_add(struct mg_iobuf *, size_t, const void *, size_t, size_t);
+EXPORT size_t mg_iobuf_del(struct mg_iobuf *, size_t ofs, size_t len);
 
-int mg_base64_update(unsigned char p, char *to, int len);
-int mg_base64_final(char *to, int len);
-int mg_base64_encode(const unsigned char *p, int n, char *to);
-int mg_base64_decode(const char *src, int n, char *dst);
-
-
+EXPORT int mg_base64_update(unsigned char p, char *to, int len);
+EXPORT int mg_base64_final(char *to, int len);
+EXPORT int mg_base64_encode(const unsigned char *p, int n, char *to);
+EXPORT int mg_base64_decode(const char *src, int n, char *dst);
 
 
-typedef struct {
+
+
+EXPORT typedef struct {
   uint32_t buf[4];
   uint32_t bits[2];
   unsigned char in[64];
 } mg_md5_ctx;
 
-void mg_md5_init(mg_md5_ctx *c);
-void mg_md5_update(mg_md5_ctx *c, const unsigned char *data, size_t len);
-void mg_md5_final(mg_md5_ctx *c, unsigned char[16]);
+EXPORT void mg_md5_init(mg_md5_ctx *c);
+EXPORT void mg_md5_update(mg_md5_ctx *c, const unsigned char *data, size_t len);
+EXPORT void mg_md5_final(mg_md5_ctx *c, unsigned char[16]);
 
 
 
 
-typedef struct {
+EXPORT typedef struct {
   uint32_t state[5];
   uint32_t count[2];
   unsigned char buffer[64];
 } mg_sha1_ctx;
 
-void mg_sha1_init(mg_sha1_ctx *);
-void mg_sha1_update(mg_sha1_ctx *, const unsigned char *data, size_t len);
-void mg_sha1_final(unsigned char digest[20], mg_sha1_ctx *);
+EXPORT void mg_sha1_init(mg_sha1_ctx *);
+EXPORT void mg_sha1_update(mg_sha1_ctx *, const unsigned char *data, size_t len);
+EXPORT void mg_sha1_final(unsigned char digest[20], mg_sha1_ctx *);
 
 
-struct mg_connection;
-typedef void (*mg_event_handler_t)(struct mg_connection *, int ev,
+EXPORT struct mg_connection;
+EXPORT typedef void (*mg_event_handler_t)(struct mg_connection *, int ev,
                                    void *ev_data, void *fn_data);
-void mg_call(struct mg_connection *c, int ev, void *ev_data);
-void mg_error(struct mg_connection *c, const char *fmt, ...);
+EXPORT void mg_call(struct mg_connection *c, int ev, void *ev_data);
+EXPORT void mg_error(struct mg_connection *c, const char *fmt, ...);
 
-enum {
+EXPORT enum {
   MG_EV_ERROR,       // Error                        char *error_message
   MG_EV_OPEN,        // Connection created           NULL
   MG_EV_POLL,        // mg_mgr_poll iteration        int64_t *milliseconds
@@ -855,19 +855,19 @@ enum {
 
 
 
-struct mg_dns {
+EXPORT struct mg_dns {
   const char *url;          // DNS server URL
   struct mg_connection *c;  // DNS server connection
 };
 
-struct mg_addr {
+EXPORT struct mg_addr {
   uint16_t port;    // TCP or UDP port in network byte order
   uint32_t ip;      // IP address in network byte order
   uint8_t ip6[16];  // IPv6 address
   bool is_ip6;      // True when address is IPv6 address
 };
 
-struct mg_mgr {
+EXPORT struct mg_mgr {
   struct mg_connection *conns;  // List of active connections
   struct mg_dns dns4;           // DNS for IPv4
   struct mg_dns dns6;           // DNS for IPv6
@@ -879,7 +879,7 @@ struct mg_mgr {
 #endif
 };
 
-struct mg_connection {
+EXPORT struct mg_connection {
   struct mg_connection *next;  // Linkage in struct mg_mgr :: connections
   struct mg_mgr *mgr;          // Our container
   struct mg_addr loc;          // Local address
@@ -914,25 +914,25 @@ EXPORT void mg_mgr_poll(struct mg_mgr *, int ms);
 EXPORT void mg_mgr_init(struct mg_mgr *);
 EXPORT void mg_mgr_free(struct mg_mgr *);
 
-struct mg_connection *mg_listen(struct mg_mgr *, const char *url,
+EXPORT struct mg_connection *mg_listen(struct mg_mgr *, const char *url,
                                 mg_event_handler_t fn, void *fn_data);
-struct mg_connection *mg_connect(struct mg_mgr *, const char *url,
+EXPORT struct mg_connection *mg_connect(struct mg_mgr *, const char *url,
                                  mg_event_handler_t fn, void *fn_data);
-void mg_connect_resolved(struct mg_connection *);
-bool mg_send(struct mg_connection *, const void *, size_t);
-size_t mg_printf(struct mg_connection *, const char *fmt, ...);
-size_t mg_vprintf(struct mg_connection *, const char *fmt, va_list ap);
-char *mg_straddr(struct mg_addr *, char *, size_t);
-bool mg_aton(struct mg_str str, struct mg_addr *addr);
-char *mg_ntoa(const struct mg_addr *addr, char *buf, size_t len);
+EXPORT void mg_connect_resolved(struct mg_connection *);
+EXPORT bool mg_send(struct mg_connection *, const void *, size_t);
+EXPORT size_t mg_printf(struct mg_connection *, const char *fmt, ...);
+EXPORT size_t mg_vprintf(struct mg_connection *, const char *fmt, va_list ap);
+EXPORT char *mg_straddr(struct mg_addr *, char *, size_t);
+EXPORT bool mg_aton(struct mg_str str, struct mg_addr *addr);
+EXPORT char *mg_ntoa(const struct mg_addr *addr, char *buf, size_t len);
 
-struct mg_connection *mg_mkpipe(struct mg_mgr *, mg_event_handler_t, void *);
-void mg_mgr_wakeup(struct mg_connection *pipe, const void *buf, size_t len);
+EXPORT struct mg_connection *mg_mkpipe(struct mg_mgr *, mg_event_handler_t, void *);
+EXPORT void mg_mgr_wakeup(struct mg_connection *pipe, const void *buf, size_t len);
 
 // These functions are used to integrate with custom network stacks
-struct mg_connection *mg_alloc_conn(struct mg_mgr *);
-void mg_close_conn(struct mg_connection *c);
-bool mg_open_listener(struct mg_connection *c, const char *url);
+EXPORT struct mg_connection *mg_alloc_conn(struct mg_mgr *);
+EXPORT void mg_close_conn(struct mg_connection *c);
+EXPORT bool mg_open_listener(struct mg_connection *c, const char *url);
 
 
 
@@ -941,12 +941,12 @@ bool mg_open_listener(struct mg_connection *c, const char *url);
 
 
 
-struct mg_http_header {
+EXPORT struct mg_http_header {
   struct mg_str name;   // Header name
   struct mg_str value;  // Header value
 };
 
-struct mg_http_message {
+EXPORT struct mg_http_message {
   struct mg_str method, uri, query, proto;             // Request/response line
   struct mg_http_header headers[MG_MAX_HTTP_HEADERS];  // Headers
   struct mg_str body;                                  // Body
@@ -956,7 +956,7 @@ struct mg_http_message {
 };
 
 // Parameter for mg_http_serve_dir()
-struct mg_http_serve_opts {
+EXPORT struct mg_http_serve_opts {
   const char *root_dir;       // Web root directory, must be non-NULL
   const char *ssi_pattern;    // SSI file name pattern, e.g. #.shtml
   const char *extra_headers;  // Extra HTTP headers to add in responses
@@ -965,20 +965,20 @@ struct mg_http_serve_opts {
 };
 
 // Parameter for mg_http_next_multipart
-struct mg_http_part {
+EXPORT struct mg_http_part {
   struct mg_str name;      // Form field name
   struct mg_str filename;  // Filename for file uploads
   struct mg_str body;      // Part contents
 };
 
 EXPORT int mg_http_parse(const char *s, size_t len, struct mg_http_message *);
-int mg_http_get_request_len(const unsigned char *buf, size_t buf_len);
-void mg_http_printf_chunk(struct mg_connection *cnn, const char *fmt, ...);
-void mg_http_write_chunk(struct mg_connection *c, const char *buf, size_t len);
-void mg_http_delete_chunk(struct mg_connection *c, struct mg_http_message *hm);
+EXPORT int mg_http_get_request_len(const unsigned char *buf, size_t buf_len);
+EXPORT void mg_http_printf_chunk(struct mg_connection *cnn, const char *fmt, ...);
+EXPORT void mg_http_write_chunk(struct mg_connection *c, const char *buf, size_t len);
+EXPORT void mg_http_delete_chunk(struct mg_connection *c, struct mg_http_message *hm);
 EXPORT struct mg_connection *mg_http_listen(struct mg_mgr *, const char *url,
                                      mg_event_handler_t fn, void *fn_data);
-struct mg_connection *mg_http_connect(struct mg_mgr *, const char *url,
+EXPORT struct mg_connection *mg_http_connect(struct mg_mgr *, const char *url,
                                       mg_event_handler_t fn, void *fn_data);
 EXPORT void mg_http_serve_dir(struct mg_connection *, struct mg_http_message *hm,
                        struct mg_http_serve_opts *opts);
@@ -988,19 +988,19 @@ EXPORT void mg_http_reply(struct mg_connection *, int status_code, const char *h
                    const char *body_fmt, ...);
 EXPORT struct mg_str *mg_http_get_header(struct mg_http_message *, const char *name);
 EXPORT int mg_http_get_var(const struct mg_str *, const char *name, char *, size_t);
-int mg_url_decode(const char *s, size_t n, char *to, size_t to_len, int form);
-size_t mg_url_encode(const char *s, size_t n, char *buf, size_t len);
-void mg_http_creds(struct mg_http_message *, char *, size_t, char *, size_t);
+EXPORT int mg_url_decode(const char *s, size_t n, char *to, size_t to_len, int form);
+EXPORT size_t mg_url_encode(const char *s, size_t n, char *buf, size_t len);
+EXPORT void mg_http_creds(struct mg_http_message *, char *, size_t, char *, size_t);
 EXPORT bool mg_http_match_uri(const struct mg_http_message *, const char *glob);
-int mg_http_upload(struct mg_connection *, struct mg_http_message *hm,
+EXPORT int mg_http_upload(struct mg_connection *, struct mg_http_message *hm,
                    struct mg_fs *fs, const char *dir);
-void mg_http_bauth(struct mg_connection *, const char *user, const char *pass);
-struct mg_str mg_http_get_header_var(struct mg_str s, struct mg_str v);
+EXPORT void mg_http_bauth(struct mg_connection *, const char *user, const char *pass);
+EXPORT struct mg_str mg_http_get_header_var(struct mg_str s, struct mg_str v);
 EXPORT size_t mg_http_next_multipart(struct mg_str, size_t, struct mg_http_part *);
-int mg_http_status(const struct mg_http_message *hm);
+EXPORT int mg_http_status(const struct mg_http_message *hm);
 
 
-void mg_http_serve_ssi(struct mg_connection *c, const char *root,
+EXPORT void mg_http_serve_ssi(struct mg_connection *c, const char *root,
                        const char *fullpath);
 
 
@@ -1008,7 +1008,7 @@ void mg_http_serve_ssi(struct mg_connection *c, const char *root,
 
 
 
-struct mg_tls_opts {
+EXPORT struct mg_tls_opts {
   const char *ca;         // CA certificate file. For both listeners and clients
   const char *crl;        // Certificate Revocation List. For clients
   const char *cert;       // Certificate
@@ -1020,9 +1020,9 @@ struct mg_tls_opts {
 
 EXPORT void mg_tls_init(struct mg_connection *, struct mg_tls_opts *);
 EXPORT void mg_tls_free(struct mg_connection *);
-long mg_tls_send(struct mg_connection *, const void *buf, size_t len);
-long mg_tls_recv(struct mg_connection *, void *buf, size_t len);
-void mg_tls_handshake(struct mg_connection *);
+EXPORT long mg_tls_send(struct mg_connection *, const void *buf, size_t len);
+EXPORT long mg_tls_recv(struct mg_connection *, void *buf, size_t len);
+EXPORT void mg_tls_handshake(struct mg_connection *);
 
 
 
@@ -1035,7 +1035,7 @@ void mg_tls_handshake(struct mg_connection *);
 #include <mbedtls/net_sockets.h>
 #include <mbedtls/ssl.h>
 
-struct mg_tls {
+EXPORT struct mg_tls {
   char *cafile;             // CA certificate path
   mbedtls_x509_crt ca;      // Parsed CA certificate
   mbedtls_x509_crl crl;     // Parsed Certificate Revocation List
@@ -1052,7 +1052,7 @@ struct mg_tls {
 #include <openssl/err.h>
 #include <openssl/ssl.h>
 
-struct mg_tls {
+EXPORT struct mg_tls {
   SSL_CTX *ctx;
   SSL *ssl;
 };
@@ -1068,7 +1068,7 @@ struct mg_tls {
 
 
 
-struct mg_ws_message {
+EXPORT struct mg_ws_message {
   struct mg_str data;  // Websocket message data
   uint8_t flags;       // Websocket message flags
 };
@@ -1083,10 +1083,10 @@ EXPORT size_t mg_ws_wrap(struct mg_connection *, size_t len, int op);
 
 
 
-struct mg_connection *mg_sntp_connect(struct mg_mgr *mgr, const char *url,
+EXPORT struct mg_connection *mg_sntp_connect(struct mg_mgr *mgr, const char *url,
                                       mg_event_handler_t fn, void *fn_data);
-void mg_sntp_send(struct mg_connection *c, unsigned long utc);
-int64_t mg_sntp_parse(const unsigned char *buf, size_t len);
+EXPORT void mg_sntp_send(struct mg_connection *c, unsigned long utc);
+EXPORT int64_t mg_sntp_parse(const unsigned char *buf, size_t len);
 
 
 
@@ -1107,7 +1107,7 @@ int64_t mg_sntp_parse(const unsigned char *buf, size_t len);
 #define MQTT_CMD_PINGRESP 13
 #define MQTT_CMD_DISCONNECT 14
 
-struct mg_mqtt_opts {
+EXPORT struct mg_mqtt_opts {
   struct mg_str user;          // Username, can be empty
   struct mg_str pass;          // Password, can be empty
   struct mg_str client_id;     // Client ID
@@ -1119,7 +1119,7 @@ struct mg_mqtt_opts {
   uint16_t keepalive;          // Keep-alive timer in seconds
 };
 
-struct mg_mqtt_message {
+EXPORT struct mg_mqtt_message {
   struct mg_str topic;  // Parsed topic
   struct mg_str data;   // Parsed message
   struct mg_str dgram;  // Whole MQTT datagram, including headers
@@ -1129,25 +1129,25 @@ struct mg_mqtt_message {
   uint8_t ack;  // Connack return code. 0 - success
 };
 
-struct mg_connection *mg_mqtt_connect(struct mg_mgr *, const char *url,
+EXPORT struct mg_connection *mg_mqtt_connect(struct mg_mgr *, const char *url,
                                       struct mg_mqtt_opts *opts,
                                       mg_event_handler_t fn, void *fn_data);
-struct mg_connection *mg_mqtt_listen(struct mg_mgr *mgr, const char *url,
+EXPORT struct mg_connection *mg_mqtt_listen(struct mg_mgr *mgr, const char *url,
                                      mg_event_handler_t fn, void *fn_data);
-void mg_mqtt_login(struct mg_connection *c, struct mg_mqtt_opts *opts);
-void mg_mqtt_pub(struct mg_connection *c, struct mg_str topic,
+EXPORT void mg_mqtt_login(struct mg_connection *c, struct mg_mqtt_opts *opts);
+EXPORT void mg_mqtt_pub(struct mg_connection *c, struct mg_str topic,
                  struct mg_str data, int qos, bool retain);
-void mg_mqtt_sub(struct mg_connection *, struct mg_str topic, int qos);
-int mg_mqtt_parse(const uint8_t *buf, size_t len, struct mg_mqtt_message *m);
-void mg_mqtt_send_header(struct mg_connection *, uint8_t cmd, uint8_t flags,
+EXPORT void mg_mqtt_sub(struct mg_connection *, struct mg_str topic, int qos);
+EXPORT int mg_mqtt_parse(const uint8_t *buf, size_t len, struct mg_mqtt_message *m);
+EXPORT void mg_mqtt_send_header(struct mg_connection *, uint8_t cmd, uint8_t flags,
                          uint32_t len);
-size_t mg_mqtt_next_sub(struct mg_mqtt_message *msg, struct mg_str *topic,
+EXPORT size_t mg_mqtt_next_sub(struct mg_mqtt_message *msg, struct mg_str *topic,
                         uint8_t *qos, size_t pos);
-size_t mg_mqtt_next_unsub(struct mg_mqtt_message *msg, struct mg_str *topic,
+EXPORT size_t mg_mqtt_next_unsub(struct mg_mqtt_message *msg, struct mg_str *topic,
                           size_t pos);
-void mg_mqtt_ping(struct mg_connection *);
-void mg_mqtt_pong(struct mg_connection *);
-void mg_mqtt_disconnect(struct mg_connection *);
+EXPORT void mg_mqtt_ping(struct mg_connection *);
+EXPORT void mg_mqtt_pong(struct mg_connection *);
+EXPORT void mg_mqtt_disconnect(struct mg_connection *);
 
 
 
@@ -1157,14 +1157,14 @@ void mg_mqtt_disconnect(struct mg_connection *);
 // either A (IPv4) or AAAA (IPv6) address lookup.
 // Therefore, we expect zero or one answer.
 // If `resolved` is true, then `addr` contains resolved IPv4 or IPV6 address.
-struct mg_dns_message {
+EXPORT struct mg_dns_message {
   uint16_t txnid;       // Transaction ID
   bool resolved;        // Resolve successful, addr is set
   struct mg_addr addr;  // Resolved address
   char name[256];       // Host name
 };
 
-struct mg_dns_header {
+EXPORT struct mg_dns_header {
   uint16_t txnid;  // Transaction ID
   uint16_t flags;
   uint16_t num_questions;
@@ -1174,17 +1174,17 @@ struct mg_dns_header {
 };
 
 // DNS resource record
-struct mg_dns_rr {
+EXPORT struct mg_dns_rr {
   uint16_t nlen;    // Name or pointer length
   uint16_t atype;   // Address type
   uint16_t aclass;  // Address class
   uint16_t alen;    // Address length
 };
 
-void mg_resolve(struct mg_connection *, const char *url);
-void mg_resolve_cancel(struct mg_connection *);
-bool mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *);
-size_t mg_dns_parse_rr(const uint8_t *buf, size_t len, size_t ofs,
+EXPORT void mg_resolve(struct mg_connection *, const char *url);
+EXPORT void mg_resolve_cancel(struct mg_connection *);
+EXPORT bool mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *);
+EXPORT size_t mg_dns_parse_rr(const uint8_t *buf, size_t len, size_t ofs,
                        bool is_question, struct mg_dns_rr *);
 
 #ifdef __cplusplus

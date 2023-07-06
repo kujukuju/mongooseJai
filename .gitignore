@@ -1,1 +1,4 @@
 build/
+mongoose/cmake-*
+.idea/
+.build/
