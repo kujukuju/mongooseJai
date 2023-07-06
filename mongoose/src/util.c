@@ -1,9 +1,5 @@
 #include "util.h"
 
-#if MG_ARCH == MG_ARCH_UNIX && defined(__APPLE__)
-#include <mach/mach_time.h>
-#endif
-
 #if MG_ENABLE_CUSTOM_RANDOM
 #else
 void mg_random(void *buf, size_t len) {
@@ -25,6 +21,19 @@ void mg_random(void *buf, size_t len) {
 }
 #endif
 
+char *mg_random_str(char *buf, size_t len) {
+  size_t i;
+  mg_random(buf, len);
+  for (i = 0; i < len; i++) {
+    uint8_t c = ((uint8_t *) buf)[i] % 62U;
+    buf[i] = i == len - 1 ? (char) '\0'            // 0-terminate last byte
+             : c < 26     ? (char) ('a' + c)       // lowercase
+             : c < 52     ? (char) ('A' + c - 26)  // uppercase
+                          : (char) ('0' + c - 52);     // numeric
+  }
+  return buf;
+}
+
 uint32_t mg_ntohl(uint32_t net) {
   uint8_t data[4] = {0, 0, 0, 0};
   memcpy(&data, &net, sizeof(data));
@@ -39,11 +48,16 @@ uint16_t mg_ntohs(uint16_t net) {
 }
 
 uint32_t mg_crc32(uint32_t crc, const char *buf, size_t len) {
-  int i;
+  static const uint32_t crclut[16] = {
+      // table for polynomial 0xEDB88320 (reflected)
+      0x00000000, 0x1DB71064, 0x3B6E20C8, 0x26D930AC, 0x76DC4190, 0x6B6B51F4,
+      0x4DB26158, 0x5005713C, 0xEDB88320, 0xF00F9344, 0xD6D6A3E8, 0xCB61B38C,
+      0x9B64C2B0, 0x86D3D2D4, 0xA00AE278, 0xBDBDF21C};
   crc = ~crc;
   while (len--) {
-    crc ^= *(unsigned char *) buf++;
-    for (i = 0; i < 8; i++) crc = crc & 1 ? (crc >> 1) ^ 0xedb88320 : crc >> 1;
+    uint8_t byte = *(uint8_t *) buf++;
+    crc = crclut[(crc ^ byte) & 0x0F] ^ (crc >> 4);
+    crc = crclut[(crc ^ (byte >> 4)) & 0x0F] ^ (crc >> 4);
   }
   return ~crc;
 }
@@ -66,49 +80,70 @@ static int parse_net(const char *spec, uint32_t *net, uint32_t *mask) {
   return len;
 }
 
-int mg_check_ip_acl(struct mg_str acl, uint32_t remote_ip) {
+int mg_check_ip_acl(struct mg_str acl, struct mg_addr *remote_ip) {
   struct mg_str k, v;
   int allowed = acl.len == 0 ? '+' : '-';  // If any ACL is set, deny by default
-  while (mg_commalist(&acl, &k, &v)) {
-    uint32_t net, mask;
-    if (k.ptr[0] != '+' && k.ptr[0] != '-') return -1;
-    if (parse_net(&k.ptr[1], &net, &mask) == 0) return -2;
-    if ((mg_ntohl(remote_ip) & mask) == net) allowed = k.ptr[0];
+  uint32_t remote_ip4;
+  if (remote_ip->is_ip6) {
+    return -1;  // TODO(): handle IPv6 ACL and addresses
+  } else {  // IPv4
+    memcpy((void *) &remote_ip4, remote_ip->ip, sizeof(remote_ip4));
+    while (mg_commalist(&acl, &k, &v)) {
+      uint32_t net, mask;
+      if (k.ptr[0] != '+' && k.ptr[0] != '-') return -1;
+      if (parse_net(&k.ptr[1], &net, &mask) == 0) return -2;
+      if ((mg_ntohl(remote_ip4) & mask) == net) allowed = k.ptr[0];
+    }
   }
   return allowed == '+';
 }
 
-int64_t mg_millis(void) {
+#if MG_ENABLE_CUSTOM_MILLIS
+#else
+uint64_t mg_millis(void) {
 #if MG_ARCH == MG_ARCH_WIN32
   return GetTickCount();
+#elif MG_ARCH == MG_ARCH_RP2040
+  return time_us_64() / 1000;
 #elif MG_ARCH == MG_ARCH_ESP32
   return esp_timer_get_time() / 1000;
-#elif MG_ARCH == MG_ARCH_ESP8266
-  return xTaskGetTickCount() * portTICK_PERIOD_MS;
-#elif MG_ARCH == MG_ARCH_FREERTOS_TCP || MG_ARCH == MG_ARCH_FREERTOS_LWIP
+#elif MG_ARCH == MG_ARCH_ESP8266 || MG_ARCH == MG_ARCH_FREERTOS
   return xTaskGetTickCount() * portTICK_PERIOD_MS;
 #elif MG_ARCH == MG_ARCH_AZURERTOS
   return tx_time_get() * (1000 /* MS per SEC */ / TX_TIMER_TICKS_PER_SECOND);
+#elif MG_ARCH == MG_ARCH_TIRTOS
+  return (uint64_t) Clock_getTicks();
+#elif MG_ARCH == MG_ARCH_ZEPHYR
+  return (uint64_t) k_uptime_get();
+#elif MG_ARCH == MG_ARCH_CMSIS_RTOS1
+  return (uint64_t) rt_time_get();
+#elif MG_ARCH == MG_ARCH_CMSIS_RTOS2
+  return (uint64_t) ((osKernelGetTickCount() * 1000) / osKernelGetTickFreq());
+#elif MG_ARCH == MG_ARCH_RTTHREAD
+  return (uint64_t) ((rt_tick_get() * 1000) / RT_TICK_PER_SECOND);
 #elif MG_ARCH == MG_ARCH_UNIX && defined(__APPLE__)
-  uint64_t ticks = mach_absolute_time();
-  static mach_timebase_info_data_t timebase;
-  mach_timebase_info(&timebase);
-  double ticks_to_nanos = (double) timebase.numer / timebase.denom;
-  uint64_t uptime_nanos = (uint64_t) (ticks_to_nanos * ticks);
-  return (int64_t) (uptime_nanos / 1000000);
+  // Apple CLOCK_MONOTONIC_RAW is equivalent to CLOCK_BOOTTIME on linux
+  // Apple CLOCK_UPTIME_RAW is equivalent to CLOCK_MONOTONIC_RAW on linux
+  return clock_gettime_nsec_np(CLOCK_UPTIME_RAW) / 1000000;
 #elif MG_ARCH == MG_ARCH_UNIX
-  struct timespec ts;
-#ifdef _POSIX_MONOTONIC_CLOCK
-#ifdef CLOCK_MONOTONIC_RAW
+  struct timespec ts = {0, 0};
+  // See #1615 - prefer monotonic clock
+#if defined(CLOCK_MONOTONIC_RAW)
+  // Raw hardware-based time that is not subject to NTP adjustment
   clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
-#else
+#elif defined(CLOCK_MONOTONIC)
+  // Affected by the incremental adjustments performed by adjtime and NTP
   clock_gettime(CLOCK_MONOTONIC, &ts);
-#endif
 #else
+  // Affected by discontinuous jumps in the system time and by the incremental
+  // adjustments performed by adjtime and NTP
   clock_gettime(CLOCK_REALTIME, &ts);
 #endif
-  return ((int64_t) ts.tv_sec * 1000 + (int64_t) ts.tv_nsec / 1000000);
+  return ((uint64_t) ts.tv_sec * 1000 + (uint64_t) ts.tv_nsec / 1000000);
+#elif defined(ARDUINO)
+  return (uint64_t) millis();
 #else
-  return time(NULL) * 1000;
+  return (uint64_t) (time(NULL) * 1000);
 #endif
 }
+#endif

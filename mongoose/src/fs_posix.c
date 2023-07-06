@@ -17,9 +17,19 @@ static int p_stat(const char *path, size_t *size, time_t *mtime) {
 #else
 #if MG_ARCH == MG_ARCH_WIN32
   struct _stati64 st;
-  wchar_t tmp[PATH_MAX];
+  wchar_t tmp[MG_PATH_MAX];
   MultiByteToWideChar(CP_UTF8, 0, path, -1, tmp, sizeof(tmp) / sizeof(tmp[0]));
   if (_wstati64(tmp, &st) != 0) return 0;
+  // If path is a symlink, windows reports 0 in st.st_size.
+  // Get a real file size by opening it and jumping to the end
+  if (st.st_size == 0 && (st.st_mode & _S_IFREG)) {
+    FILE *fp = _wfopen(tmp, L"rb");
+    if (fp != NULL) {
+      fseek(fp, 0, SEEK_END);
+      if (ftell(fp) > 0) st.st_size = ftell(fp); // Use _ftelli64 on win10+
+      fclose(fp);
+    }
+  }
 #else
   struct MG_STAT_STRUCT st;
   if (MG_STAT_FUNC(path, &st) != 0) return 0;
@@ -158,7 +168,7 @@ static void p_list(const char *dir, void (*fn)(const char *, void *),
 static void *p_open(const char *path, int flags) {
   const char *mode = flags == MG_FS_READ ? "rb" : "a+b";
 #if MG_ARCH == MG_ARCH_WIN32
-  wchar_t b1[PATH_MAX], b2[10];
+  wchar_t b1[MG_PATH_MAX], b2[10];
   MultiByteToWideChar(CP_UTF8, 0, path, -1, b1, sizeof(b1) / sizeof(b1[0]));
   MultiByteToWideChar(CP_UTF8, 0, mode, -1, b2, sizeof(b2) / sizeof(b2[0]));
   return (void *) _wfopen(b1, b2);

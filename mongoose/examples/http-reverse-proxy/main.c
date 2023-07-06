@@ -5,13 +5,17 @@
 //    1. Run `make`. This builds and starts a proxy on port 8000
 //    2. Start your browser, go to https://localhost:8000
 //
-// To enable SSL/TLS, build it like this:
-//    make MBEDTLS_DIR=/path/to/your/mbedtls/installation
-
-static const char *s_backend_url = "https://cesanta.com";
-static const char *s_listen_url = "http://localhost:8000";
+// To enable SSL/TLS, see https://mongoose.ws/tutorials/tls/#how-to-build
 
 #include "mongoose.h"
+
+static const char *s_backend_url =
+#if MG_ENABLE_MBEDTLS || MG_ENABLE_OPENSSL
+    "https://cesanta.com";
+#else
+    "http://info.cern.ch";
+#endif
+static const char *s_listen_url = "http://localhost:8000";
 
 // Forward client request to the backend connection, rewriting the Host header
 static void forward_request(struct mg_http_message *hm,
@@ -60,6 +64,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       }
       c->fn_data = c2;
       forward_request(hm, c2);
+      c->is_resp = 0; // process further msgs in keep-alive connection
       c2->is_hexdumping = 1;
     }
   } else if (ev == MG_EV_CLOSE) {
@@ -71,7 +76,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 int main(void) {
   struct mg_mgr mgr;
 
-  mg_log_set("3");                               // Set log level
+  mg_log_set(MG_LL_DEBUG);                       // Set log level
   mg_mgr_init(&mgr);                             // Initialise event manager
   mg_http_listen(&mgr, s_listen_url, fn, NULL);  // Start proxy
   for (;;) mg_mgr_poll(&mgr, 1000);              // Event loop

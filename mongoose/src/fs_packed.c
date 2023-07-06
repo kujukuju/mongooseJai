@@ -1,4 +1,5 @@
 #include "fs.h"
+#include "printf.h"
 #include "str.h"
 
 struct packed_file {
@@ -41,7 +42,7 @@ static int packed_stat(const char *path, size_t *size, time_t *mtime) {
 
 static void packed_list(const char *dir, void (*fn)(const char *, void *),
                         void *userdata) {
-  char buf[256], tmp[sizeof(buf)];
+  char buf[MG_PATH_MAX], tmp[sizeof(buf)];
   const char *path, *begin, *end;
   size_t i, n = strlen(dir);
   tmp[0] = '\0';  // Previously listed entry
@@ -66,9 +67,10 @@ static void *packed_open(const char *path, int flags) {
   struct packed_file *fp = NULL;
   if (data == NULL) return NULL;
   if (flags & MG_FS_WRITE) return NULL;
-  fp = (struct packed_file *) calloc(1, sizeof(*fp));
-  fp->size = size;
-  fp->data = data;
+  if ((fp = (struct packed_file *) calloc(1, sizeof(*fp))) != NULL) {
+    fp->size = size;
+    fp->data = data;
+  }
   return (void *) fp;
 }
 

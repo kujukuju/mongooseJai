@@ -1,3 +1,4 @@
+#include "arch.h"
 #include "fs.h"
 
 #if MG_ENABLE_FATFS
@@ -41,7 +42,7 @@ static time_t ff_time_to_epoch(uint16_t fdate, uint16_t ftime) {
 
 static int ff_stat(const char *path, size_t *size, time_t *mtime) {
   FILINFO fi;
-  if (path[0] == '\0' || strcmp(path, MG_FATFS_ROOT) == 0) {
+  if (path[0] == '\0') {
     if (size) *size = 0;
     if (mtime) *mtime = 0;
     return MG_FS_DIR;
@@ -72,12 +73,13 @@ static void *ff_open(const char *path, int flags) {
   unsigned char mode = FA_READ;
   if (flags & MG_FS_WRITE) mode |= FA_WRITE | FA_OPEN_ALWAYS | FA_OPEN_APPEND;
   if (f_open(&f, path, mode) == 0) {
-    FIL *fp = calloc(1, sizeof(*fp));
-    *fp = f;
-    return fp;
-  } else {
-    return NULL;
+    FIL *fp;
+    if ((fp = calloc(1, sizeof(*fp))) != NULL) {
+      memcpy(fp, &f, sizeof(*fp));
+      return fp;
+    }
   }
+  return NULL;
 }
 
 static void ff_close(void *fp) {
@@ -88,7 +90,7 @@ static void ff_close(void *fp) {
 }
 
 static size_t ff_read(void *fp, void *buf, size_t len) {
-  unsigned n = 0, misalign = ((size_t) buf) & 3;
+  UINT n = 0, misalign = ((size_t) buf) & 3;
   if (misalign) {
     char aligned[4];
     f_read((FIL *) fp, aligned, len > misalign ? misalign : len, &n);
@@ -100,7 +102,7 @@ static size_t ff_read(void *fp, void *buf, size_t len) {
 }
 
 static size_t ff_write(void *fp, const void *buf, size_t len) {
-  unsigned n = 0;
+  UINT n = 0;
   return f_write((FIL *) fp, (char *) buf, len, &n) == FR_OK ? n : 0;
 }
 

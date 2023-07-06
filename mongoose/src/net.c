@@ -1,59 +1,37 @@
-#include "net.h"
 #include "dns.h"
+#include "fmt.h"
 #include "log.h"
+#include "net.h"
+#include "printf.h"
+#include "timer.h"
 #include "tls.h"
-#include "util.h"
 
-size_t mg_vprintf(struct mg_connection *c, const char *fmt, va_list ap) {
-  char mem[256], *buf = mem;
-  size_t len = mg_vasprintf(&buf, sizeof(mem), fmt, ap);
-  len = mg_send(c, buf, len);
-  if (buf != mem) free(buf);
-  return len;
+size_t mg_vprintf(struct mg_connection *c, const char *fmt, va_list *ap) {
+  size_t old = c->send.len;
+  mg_vxprintf(mg_pfn_iobuf, &c->send, fmt, ap);
+  return c->send.len - old;
 }
 
 size_t mg_printf(struct mg_connection *c, const char *fmt, ...) {
   size_t len = 0;
   va_list ap;
   va_start(ap, fmt);
-  len = mg_vprintf(c, fmt, ap);
+  len = mg_vprintf(c, fmt, &ap);
   va_end(ap);
   return len;
 }
 
-char *mg_straddr(struct mg_addr *a, char *buf, size_t len) {
-  char tmp[30];
-  const char *fmt = a->is_ip6 ? "[%s]:%d" : "%s:%d";
-  mg_ntoa(a, tmp, sizeof(tmp));
-  mg_snprintf(buf, len, fmt, tmp, (int) mg_ntohs(a->port));
-  return buf;
-}
-
-char *mg_ntoa(const struct mg_addr *addr, char *buf, size_t len) {
-  if (addr->is_ip6) {
-    uint16_t *p = (uint16_t *) addr->ip6;
-    mg_snprintf(buf, len, "%x:%x:%x:%x:%x:%x:%x:%x", mg_htons(p[0]),
-                mg_htons(p[1]), mg_htons(p[2]), mg_htons(p[3]), mg_htons(p[4]),
-                mg_htons(p[5]), mg_htons(p[6]), mg_htons(p[7]));
-  } else {
-    uint8_t p[4];
-    memcpy(p, &addr->ip, sizeof(p));
-    mg_snprintf(buf, len, "%d.%d.%d.%d", (int) p[0], (int) p[1], (int) p[2],
-                (int) p[3]);
-  }
-  return buf;
-}
-
 static bool mg_atonl(struct mg_str str, struct mg_addr *addr) {
+  uint32_t localhost = mg_htonl(0x7f000001);
   if (mg_vcasecmp(&str, "localhost") != 0) return false;
-  addr->ip = mg_htonl(0x7f000001);
+  memcpy(addr->ip, &localhost, sizeof(uint32_t));
   addr->is_ip6 = false;
   return true;
 }
 
 static bool mg_atone(struct mg_str str, struct mg_addr *addr) {
   if (str.len > 0) return false;
-  addr->ip = 0;
+  memset(addr->ip, 0, sizeof(addr->ip));
   addr->is_ip6 = false;
   return true;
 }
@@ -81,15 +59,18 @@ static bool mg_aton4(struct mg_str str, struct mg_addr *addr) {
 
 static bool mg_v4mapped(struct mg_str str, struct mg_addr *addr) {
   int i;
+  uint32_t ipv4;
   if (str.len < 14) return false;
   if (str.ptr[0] != ':' || str.ptr[1] != ':' || str.ptr[6] != ':') return false;
   for (i = 2; i < 6; i++) {
     if (str.ptr[i] != 'f' && str.ptr[i] != 'F') return false;
   }
+  //struct mg_str s = mg_str_n(&str.ptr[7], str.len - 7);
   if (!mg_aton4(mg_str_n(&str.ptr[7], str.len - 7), addr)) return false;
-  memset(addr->ip6, 0, sizeof(addr->ip6));
-  addr->ip6[10] = addr->ip6[11] = 255;
-  memcpy(&addr->ip6[12], &addr->ip, 4);
+  memcpy(&ipv4, addr->ip, sizeof(ipv4));
+  memset(addr->ip, 0, sizeof(addr->ip));
+  addr->ip[10] = addr->ip[11] = 255;
+  memcpy(&addr->ip[12], &ipv4, 4);
   addr->is_ip6 = true;
   return true;
 }
@@ -106,8 +87,8 @@ static bool mg_aton6(struct mg_str str, struct mg_addr *addr) {
       if (i > j + 3) return false;
       // MG_DEBUG(("%zu %zu [%.*s]", i, j, (int) (i - j + 1), &str.ptr[j]));
       val = mg_unhexn(&str.ptr[j], i - j + 1);
-      addr->ip6[n] = (uint8_t) ((val >> 8) & 255);
-      addr->ip6[n + 1] = (uint8_t) (val & 255);
+      addr->ip[n] = (uint8_t) ((val >> 8) & 255);
+      addr->ip[n + 1] = (uint8_t) (val & 255);
     } else if (str.ptr[i] == ':') {
       j = i + 1;
       if (i > 0 && str.ptr[i - 1] == ':') {
@@ -117,16 +98,17 @@ static bool mg_aton6(struct mg_str str, struct mg_addr *addr) {
         n += 2;
       }
       if (n > 14) return false;
-      addr->ip6[n] = addr->ip6[n + 1] = 0;  // For trailing ::
+      addr->ip[n] = addr->ip[n + 1] = 0;  // For trailing ::
     } else {
       return false;
     }
   }
   if (n < 14 && dc == 42) return false;
   if (n < 14) {
-    memmove(&addr->ip6[dc + (14 - n)], &addr->ip6[dc], n - dc + 2);
-    memset(&addr->ip6[dc], 0, 14 - n);
+    memmove(&addr->ip[dc + (14 - n)], &addr->ip[dc], n - dc + 2);
+    memset(&addr->ip[dc], 0, 14 - n);
   }
+  
   addr->is_ip6 = true;
   return true;
 }
@@ -138,9 +120,11 @@ bool mg_aton(struct mg_str str, struct mg_addr *addr) {
 }
 
 struct mg_connection *mg_alloc_conn(struct mg_mgr *mgr) {
-  struct mg_connection *c = (struct mg_connection *) calloc(1, sizeof(*c));
+  struct mg_connection *c =
+      (struct mg_connection *) calloc(1, sizeof(*c) + mgr->extraconnsize);
   if (c != NULL) {
     c->mgr = mgr;
+    c->send.align = c->recv.align = MG_IO_SIZE;
     c->id = ++mgr->nextid;
   }
   return c;
@@ -154,7 +138,7 @@ void mg_close_conn(struct mg_connection *c) {
   // Order of operations is important. `MG_EV_CLOSE` event must be fired
   // before we deallocate received data, see #1331
   mg_call(c, MG_EV_CLOSE, NULL);
-  MG_DEBUG(("%lu closed", c->id));
+  MG_DEBUG(("%lu %p closed", c->id, c->fd));
 
   mg_tls_free(c);
   mg_iobuf_free(&c->recv);
@@ -173,10 +157,11 @@ struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
   } else {
     LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
     c->is_udp = (strncmp(url, "udp:", 4) == 0);
+    c->fd = (void *) (size_t) MG_INVALID_SOCKET;
     c->fn = fn;
     c->is_client = true;
     c->fn_data = fn_data;
-    MG_DEBUG(("%lu -> %s", c->id, url));
+    MG_DEBUG(("%lu %p %s", c->id, c->fd, url));
     mg_call(c, MG_EV_OPEN, NULL);
     mg_resolve(c, url);
   }
@@ -191,6 +176,7 @@ struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
   } else if (!mg_open_listener(c, url)) {
     MG_ERROR(("Failed: %s, errno %d", url, errno));
     free(c);
+    c = NULL;
   } else {
     c->is_listening = 1;
     c->is_udp = strncmp(url, "udp:", 4) == 0;
@@ -198,28 +184,63 @@ struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
     c->fn = fn;
     c->fn_data = fn_data;
     mg_call(c, MG_EV_OPEN, NULL);
-    MG_DEBUG(("%lu %s port %u", c->id, url, mg_ntohs(c->rem.port)));
+    MG_DEBUG(("%lu %p %s", c->id, c->fd, url));
   }
   return c;
 }
 
+struct mg_connection *mg_wrapfd(struct mg_mgr *mgr, int fd,
+                                mg_event_handler_t fn, void *fn_data) {
+  struct mg_connection *c = mg_alloc_conn(mgr);
+  if (c != NULL) {
+    c->fd = (void *) (size_t) fd;
+    c->fn = fn;
+    c->fn_data = fn_data;
+    MG_EPOLL_ADD(c);
+    mg_call(c, MG_EV_OPEN, NULL);
+    LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
+  }
+  return c;
+}
+
+struct mg_timer *mg_timer_add(struct mg_mgr *mgr, uint64_t milliseconds,
+                              unsigned flags, void (*fn)(void *), void *arg) {
+  struct mg_timer *t = (struct mg_timer *) calloc(1, sizeof(*t));
+  if (t != NULL) {
+    mg_timer_init(&mgr->timers, t, milliseconds, flags, fn, arg);
+    t->id = mgr->timerid++;
+  }
+  return t;
+}
+
 void mg_mgr_free(struct mg_mgr *mgr) {
   struct mg_connection *c;
+  struct mg_timer *tmp, *t = mgr->timers;
+  while (t != NULL) tmp = t->next, free(t), t = tmp;
+  mgr->timers = NULL;  // Important. Next call to poll won't touch timers
   for (c = mgr->conns; c != NULL; c = c->next) c->is_closing = 1;
   mg_mgr_poll(mgr, 0);
-#if MG_ARCH == MG_ARCH_FREERTOS_TCP
+#if MG_ENABLE_FREERTOS_TCP
   FreeRTOS_DeleteSocketSet(mgr->ss);
 #endif
   MG_DEBUG(("All connections closed"));
+#if MG_ENABLE_EPOLL
+  if (mgr->epoll_fd >= 0) close(mgr->epoll_fd), mgr->epoll_fd = -1;
+#endif
 }
 
 void mg_mgr_init(struct mg_mgr *mgr) {
   memset(mgr, 0, sizeof(*mgr));
+#if MG_ENABLE_EPOLL
+  if ((mgr->epoll_fd = epoll_create1(0)) < 0) MG_ERROR(("epoll: %d", errno));
+#else
+  mgr->epoll_fd = -1;
+#endif
 #if MG_ARCH == MG_ARCH_WIN32 && MG_ENABLE_WINSOCK
   // clang-format off
   { WSADATA data; WSAStartup(MAKEWORD(2, 2), &data); }
   // clang-format on
-#elif MG_ARCH == MG_ARCH_FREERTOS_TCP
+#elif MG_ENABLE_FREERTOS_TCP
   mgr->ss = FreeRTOS_CreateSocketSet();
 #elif defined(__unix) || defined(__unix__) || defined(__APPLE__)
   // Ignore SIGPIPE signal, so if client cancels the request, it

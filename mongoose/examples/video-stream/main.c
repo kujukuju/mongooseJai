@@ -10,7 +10,7 @@ static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     if (mg_http_match_uri(hm, "/api/video1")) {
-      c->label[0] = 'S';  // Mark that connection as live streamer
+      c->data[0] = 'S';  // Mark that connection as live streamer
       mg_printf(
           c, "%s",
           "HTTP/1.0 200 OK\r\n"
@@ -22,6 +22,7 @@ static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       mg_http_serve_dir(c, ev_data, &opts);
     }
   }
+  (void) fn_data;
 }
 
 // The image stream is simulated by sending MJPEG frames specified by the
@@ -36,7 +37,7 @@ static void broadcast_mjpeg_frame(struct mg_mgr *mgr) {
   char *data = mg_file_read(&mg_fs_posix, path, &size);  // Read next file
   struct mg_connection *c;
   for (c = mgr->conns; c != NULL; c = c->next) {
-    if (c->label[0] != 'S') continue;         // Skip non-stream connections
+    if (c->data[0] != 'S') continue;         // Skip non-stream connections
     if (data == NULL || size == 0) continue;  // Skip on file read error
     mg_printf(c,
               "--foo\r\nContent-Type: image/jpeg\r\n"
@@ -54,13 +55,11 @@ static void timer_callback(void *arg) {
 
 int main(void) {
   struct mg_mgr mgr;
-  struct mg_timer t1;
 
   mg_mgr_init(&mgr);
   mg_http_listen(&mgr, "http://localhost:8000", cb, NULL);
-  mg_timer_init(&t1, 500, MG_TIMER_REPEAT, timer_callback, &mgr);
+  mg_timer_add(&mgr, 500, MG_TIMER_REPEAT, timer_callback, &mgr);
   for (;;) mg_mgr_poll(&mgr, 50);
-  mg_timer_free(&t1);
   mg_mgr_free(&mgr);
 
   return 0;

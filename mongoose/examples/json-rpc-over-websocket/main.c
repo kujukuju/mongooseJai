@@ -3,24 +3,24 @@
 //
 // See https://mongoose.ws/tutorials/json-rpc-over-websocket/
 
-#include "mjson.h"
 #include "mongoose.h"
 
 static const char *s_listen_on = "ws://localhost:8000";
 static const char *s_web_root = "web_root";
+static struct mg_rpc *s_rpc_head = NULL;
 
-static void sum(struct jsonrpc_request *r) {
+static void rpc_sum(struct mg_rpc_req *r) {
   double a = 0.0, b = 0.0;
-  mjson_get_number(r->params, r->params_len, "$[0]", &a);
-  mjson_get_number(r->params, r->params_len, "$[1]", &b);
-  jsonrpc_return_success(r, "%g", a + b);
+  mg_json_get_num(r->frame, "$.params[0]", &a);
+  mg_json_get_num(r->frame, "$.params[1]", &b);
+  mg_rpc_ok(r, "%g", a + b);
 }
 
-static void multiply(struct jsonrpc_request *r) {
+static void rpc_mul(struct mg_rpc_req *r) {
   double a = 0.0, b = 0.0;
-  mjson_get_number(r->params, r->params_len, "$[0]", &a);
-  mjson_get_number(r->params, r->params_len, "$[1]", &b);
-  jsonrpc_return_success(r, "%g", a * b);
+  mg_json_get_num(r->frame, "$.params[0]", &a);
+  mg_json_get_num(r->frame, "$.params[1]", &b);
+  mg_rpc_ok(r, "%g", a * b);
 }
 
 // This RESTful server implements the following endpoints:
@@ -30,7 +30,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_OPEN) {
     // c->is_hexdumping = 1;
   } else if (ev == MG_EV_WS_OPEN) {
-    c->label[0] = 'W';  // Mark this connection as an established WS client
+    c->data[0] = 'W';  // Mark this connection as an established WS client
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     if (mg_http_match_uri(hm, "/websocket")) {
@@ -45,42 +45,41 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   } else if (ev == MG_EV_WS_MSG) {
     // Got websocket frame. Received data is wm->data
     struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
-    struct mg_str req = wm->data;
-    char *response = NULL;
-    jsonrpc_process(req.ptr, req.len, mjson_print_dynamic_buf, &response, NULL);
-    mg_ws_send(c, response, strlen(response), WEBSOCKET_OP_TEXT);
-    MG_INFO(("[%.*s] -> [%s]", (int) req.len, req.ptr, response));
-    free(response);
+    struct mg_iobuf io = {0, 0, 0, 512};
+    struct mg_rpc_req r = {&s_rpc_head, 0, mg_pfn_iobuf, &io, 0, wm->data};
+    mg_rpc_process(&r);
+    if (io.buf) mg_ws_send(c, (char *) io.buf, io.len, WEBSOCKET_OP_TEXT);
+    mg_iobuf_free(&io);
   }
   (void) fn_data;
 }
 
 static void timer_fn(void *arg) {
   struct mg_mgr *mgr = (struct mg_mgr *) arg;
-  // Broadcast "hi" message to all connected websocket clients.
-  // Traverse over all connections
+  // Broadcast message to all connected websocket clients.
   for (struct mg_connection *c = mgr->conns; c != NULL; c = c->next) {
-    // Send JSON-RPC notifications to marked connections
-    const char *msg = "{\"method\":\"hiya!!\",\"params\":[1,2,3]}";
-    if (c->label[0] == 'W') mg_ws_send(c, msg, strlen(msg), WEBSOCKET_OP_TEXT);
+    if (c->data[0] != 'W') continue;
+    mg_ws_printf(c, WEBSOCKET_OP_TEXT, "{%m:%m,%m:[%d,%d,%d]}",
+                 MG_ESC("method"), MG_ESC("notification1"), MG_ESC("params"), 1,
+                 2, 3);
   }
 }
 
 int main(void) {
-  struct mg_mgr mgr;   // Event manager
-  struct mg_timer t1;  // Timer
+  struct mg_mgr mgr;        // Event manager
+  mg_mgr_init(&mgr);        // Init event manager
+  mg_log_set(MG_LL_DEBUG);  // Set log level
+  mg_timer_add(&mgr, 5000, MG_TIMER_REPEAT, timer_fn, &mgr);  // Init timer
 
-  mg_mgr_init(&mgr);  // Init event manager
-  mg_timer_init(&t1, 5000, MG_TIMER_REPEAT, timer_fn, &mgr);  // Init timer
-
-  jsonrpc_init(NULL, NULL);         // Init JSON-RPC instance
-  jsonrpc_export("sum", sum);       // And export a couple
-  jsonrpc_export("mul", multiply);  // of RPC functions
+  // Configure JSON-RPC functions we're going to handle
+  mg_rpc_add(&s_rpc_head, mg_str("sum"), rpc_sum, NULL);
+  mg_rpc_add(&s_rpc_head, mg_str("mul"), rpc_mul, NULL);
+  mg_rpc_add(&s_rpc_head, mg_str("rpc.list"), mg_rpc_list, &s_rpc_head);
 
   printf("Starting WS listener on %s/websocket\n", s_listen_on);
   mg_http_listen(&mgr, s_listen_on, fn, NULL);  // Create HTTP listener
   for (;;) mg_mgr_poll(&mgr, 1000);             // Infinite event loop
-  mg_timer_free(&t1);                           // Free timer resources
   mg_mgr_free(&mgr);                            // Deallocate event manager
+  mg_rpc_del(&s_rpc_head, NULL);                // Deallocate RPC handlers
   return 0;
 }

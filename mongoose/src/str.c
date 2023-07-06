@@ -1,5 +1,4 @@
 #include "str.h"
-#include <stdlib.h>
 
 struct mg_str mg_str_s(const char *s) {
   struct mg_str str = {s, s == NULL ? 0 : strlen(s)};
@@ -75,16 +74,13 @@ const char *mg_strstr(const struct mg_str haystack,
                       const struct mg_str needle) {
   size_t i;
   if (needle.len > haystack.len) return NULL;
+  if (needle.len == 0) return haystack.ptr;
   for (i = 0; i <= haystack.len - needle.len; i++) {
     if (memcmp(haystack.ptr + i, needle.ptr, needle.len) == 0) {
       return haystack.ptr + i;
     }
   }
   return NULL;
-}
-
-static bool is_digit(int c) {
-  return c >= '0' && c <= '9';
 }
 
 static bool is_space(int c) {
@@ -134,9 +130,9 @@ bool mg_globmatch(const char *s1, size_t n1, const char *s2, size_t n2) {
 }
 
 static size_t mg_nce(const char *s, size_t n, size_t ofs, size_t *koff,
-                     size_t *klen, size_t *voff, size_t *vlen) {
+                     size_t *klen, size_t *voff, size_t *vlen, char delim) {
   size_t kvlen, kl;
-  for (kvlen = 0; ofs + kvlen < n && s[ofs + kvlen] != ',';) kvlen++;
+  for (kvlen = 0; ofs + kvlen < n && s[ofs + kvlen] != delim;) kvlen++;
   for (kl = 0; kl < kvlen && s[ofs + kl] != '=';) kl++;
   if (koff != NULL) *koff = ofs;
   if (klen != NULL) *klen = kl;
@@ -146,55 +142,23 @@ static size_t mg_nce(const char *s, size_t n, size_t ofs, size_t *koff,
   return ofs > n ? n : ofs;
 }
 
-bool mg_commalist(struct mg_str *s, struct mg_str *k, struct mg_str *v) {
+bool mg_split(struct mg_str *s, struct mg_str *k, struct mg_str *v, char sep) {
   size_t koff = 0, klen = 0, voff = 0, vlen = 0, off = 0;
   if (s->ptr == NULL || s->len == 0) return 0;
-  off = mg_nce(s->ptr, s->len, 0, &koff, &klen, &voff, &vlen);
+  off = mg_nce(s->ptr, s->len, 0, &koff, &klen, &voff, &vlen, sep);
   if (k != NULL) *k = mg_str_n(s->ptr + koff, klen);
   if (v != NULL) *v = mg_str_n(s->ptr + voff, vlen);
   *s = mg_str_n(s->ptr + off, s->len - off);
   return off > 0;
 }
 
-size_t mg_snprintf(char *buf, size_t len, const char *fmt, ...) {
-  va_list ap;
-  size_t n;
-  va_start(ap, fmt);
-  n = mg_vsnprintf(buf, len, fmt, ap);
-  va_end(ap);
-  return n;
-}
-
-char *mg_hexdump(const void *buf, size_t len) {
-  const unsigned char *p = (const unsigned char *) buf;
-  size_t i, idx, n = 0, ofs = 0, dlen = len * 5 + 100;
-  char ascii[17] = "", *dst = (char *) calloc(1, dlen);
-  if (dst == NULL) return dst;
-  for (i = 0; i < len; i++) {
-    idx = i % 16;
-    if (idx == 0) {
-      if (i > 0 && dlen > n)
-        n += mg_snprintf(dst + n, dlen - n, "  %s\n", ascii);
-      if (dlen > n)
-        n += mg_snprintf(dst + n, dlen - n, "%04x ", (int) (i + ofs));
-    }
-    if (dlen < n) break;
-    n += mg_snprintf(dst + n, dlen - n, " %02x", p[i]);
-    ascii[idx] = (char) (p[i] < 0x20 || p[i] > 0x7e ? '.' : p[i]);
-    ascii[idx + 1] = '\0';
-  }
-  while (i++ % 16) {
-    if (n < dlen) n += mg_snprintf(dst + n, dlen - n, "%s", "   ");
-  }
-  if (n < dlen) n += mg_snprintf(dst + n, dlen - n, "  %s\n", ascii);
-  if (n > dlen - 1) n = dlen - 1;
-  dst[n] = '\0';
-  return dst;
+bool mg_commalist(struct mg_str *s, struct mg_str *k, struct mg_str *v) {
+  return mg_split(s, k, v, ',');
 }
 
 char *mg_hex(const void *buf, size_t len, char *to) {
   const unsigned char *p = (const unsigned char *) buf;
-  static const char *hex = "0123456789abcdef";
+  const char *hex = "0123456789abcdef";
   size_t i = 0;
   for (; len--; p++) {
     to[i++] = hex[p[0] >> 4];
@@ -223,155 +187,12 @@ void mg_unhex(const char *buf, size_t len, unsigned char *to) {
   }
 }
 
-size_t mg_vasprintf(char **buf, size_t size, const char *fmt, va_list ap) {
-  va_list ap_copy;
-  size_t len;
-
-  va_copy(ap_copy, ap);
-  len = mg_vsnprintf(*buf, size, fmt, ap_copy);
-  va_end(ap_copy);
-
-  if (len >= size) {
-    //  Allocate a buffer that is large enough
-    if ((*buf = (char *) calloc(1, len + 1)) == NULL) {
-      len = 0;
-    } else {
-      va_copy(ap_copy, ap);
-      len = mg_vsnprintf(*buf, len + 1, fmt, ap_copy);
-      va_end(ap_copy);
+bool mg_path_is_sane(const char *path) {
+  const char *s = path;
+  for (; s[0] != '\0'; s++) {
+    if (s == path || s[0] == '/' || s[0] == '\\') {  // Subdir?
+      if (s[1] == '.' && s[2] == '.') return false;  // Starts with ..
     }
   }
-
-  return len;
-}
-
-size_t mg_asprintf(char **buf, size_t size, const char *fmt, ...) {
-  size_t ret;
-  va_list ap;
-  va_start(ap, fmt);
-  ret = mg_vasprintf(buf, size, fmt, ap);
-  va_end(ap);
-  return ret;
-}
-
-int64_t mg_to64(struct mg_str str) {
-  int64_t result = 0, neg = 1, max = 922337203685477570 /* INT64_MAX/10-10 */;
-  size_t i = 0;
-  while (i < str.len && (str.ptr[i] == ' ' || str.ptr[i] == '\t')) i++;
-  if (i < str.len && str.ptr[i] == '-') neg = -1, i++;
-  while (i < str.len && str.ptr[i] >= '0' && str.ptr[i] <= '9') {
-    if (result > max) return 0;
-    result *= 10;
-    result += (str.ptr[i] - '0');
-    i++;
-  }
-  return result * neg;
-}
-
-size_t mg_lld(char *buf, int64_t val, bool is_signed, bool is_hex) {
-  const char *letters = "0123456789abcdef";
-  uint64_t v = (uint64_t) val;
-  size_t s = 0, n, i;
-  if (is_signed && val < 0) buf[s++] = '-', v = (uint64_t) (-val);
-  // This loop prints a number in reverse order. I guess this is because we
-  // write numbers from right to left: least significant digit comes last.
-  // Maybe because we use Arabic numbers, and Arabs write RTL?
-  if (is_hex) {
-    for (n = 0; v; v >>= 4) buf[s + n++] = letters[v & 15];
-  } else {
-    for (n = 0; v; v /= 10) buf[s + n++] = letters[v % 10];
-  }
-  // Reverse a string
-  for (i = 0; i < n / 2; i++) {
-    char t = buf[s + i];
-    buf[s + i] = buf[s + n - i - 1], buf[s + n - i - 1] = t;
-  }
-  if (val == 0) buf[n++] = '0';  // Handle special case
-  return n + s;
-}
-
-static size_t mg_copys(char *buf, size_t len, size_t n, char *p, size_t k) {
-  size_t j = 0;
-  for (j = 0; j < k && p[j]; j++)
-    if (j + n < len) buf[n + j] = p[j];
-  return j;
-}
-
-size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list ap) {
-  size_t i = 0, n = 0;
-  while (fmt[i] != '\0') {
-    if (fmt[i] == '%') {
-      size_t j, k, x = 0, is_long = 0, w = 0 /* width */, pr = 0 /* prec */;
-      char pad = ' ', minus = 0, c = fmt[++i];
-      if (c == '#') x++, c = fmt[++i];
-      if (c == '-') minus++, c = fmt[++i];
-      if (c == '0') pad = '0', c = fmt[++i];
-      while (is_digit(c)) w *= 10, w += (size_t) (c - '0'), c = fmt[++i];
-      if (c == '.') {
-        c = fmt[++i];
-        if (c == '*') {
-          pr = (size_t) va_arg(ap, int);
-          c = fmt[++i];
-        } else {
-          while (is_digit(c)) pr *= 10, pr += (size_t) (c - '0'), c = fmt[++i];
-        }
-      }
-      while (c == 'h') c = fmt[++i];  // Treat h and hh as int
-      if (c == 'l') {
-        is_long++, c = fmt[++i];
-        if (c == 'l') is_long++, c = fmt[++i];
-      }
-      if (c == 'p') x = 1, is_long = 1;
-      if (c == 'd' || c == 'u' || c == 'x' || c == 'X' || c == 'p') {
-        bool s = (c == 'd'), h = (c == 'x' || c == 'X' || c == 'p');
-        char tmp[30];
-        size_t xl = x ? 2 : 0;
-        if (is_long == 2) {
-          int64_t v = va_arg(ap, int64_t);
-          k = mg_lld(tmp, v, s, h);
-        } else if (is_long == 1) {
-          long v = va_arg(ap, long);
-          k = mg_lld(tmp, s ? (int64_t) v : (int64_t) (unsigned long) v, s, h);
-        } else {
-          int v = va_arg(ap, int);
-          k = mg_lld(tmp, s ? (int64_t) v : (int64_t) (unsigned) v, s, h);
-        }
-        for (j = 0; j < xl && w > 0; j++) w--;
-        for (j = 0; pad == ' ' && !minus && k < w && j + k < w; j++)
-          n += mg_copys(buf, len, n, &pad, 1);
-        n += mg_copys(buf, len, n, (char *) "0x", xl);
-        for (j = 0; pad == '0' && k < w && j + k < w; j++)
-          n += mg_copys(buf, len, n, &pad, 1);
-        n += mg_copys(buf, len, n, tmp, k);
-        for (j = 0; pad == ' ' && minus && k < w && j + k < w; j++)
-          n += mg_copys(buf, len, n, &pad, 1);
-      } else if (c == 'c') {
-        int p = va_arg(ap, int);
-        if (n < len) buf[n] = (char) p;
-        n++;
-      } else if (c == 's') {
-        char *p = va_arg(ap, char *);
-        if (pr == 0) pr = p == NULL ? 0 : strlen(p);
-        for (j = 0; !minus && pr < w && j + pr < w; j++)
-          n += mg_copys(buf, len, n, &pad, 1);
-        n += mg_copys(buf, len, n, p, pr);
-        for (j = 0; minus && pr < w && j + pr < w; j++)
-          n += mg_copys(buf, len, n, &pad, 1);
-      } else if (c == '%') {
-        if (n < len) buf[n] = '%';
-        n++;
-      } else {
-        if (n < len) buf[n] = '%';
-        n++;
-        if (n < len) buf[n] = c;
-        n++;
-      }
-      i++;
-    } else {
-      if (n < len) buf[n] = fmt[i];
-      n++, i++;
-    }
-  }
-  if (n < len) buf[n] = '\0';
-  return n;
+  return true;
 }

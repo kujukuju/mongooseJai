@@ -26,6 +26,32 @@ static void signal_handler(int signo) {
   s_signo = signo;
 }
 
+static size_t mg_mqtt_next_topic(struct mg_mqtt_message *msg,
+                                 struct mg_str *topic, uint8_t *qos,
+                                 size_t pos) {
+  unsigned char *buf = (unsigned char *) msg->dgram.ptr + pos;
+  size_t new_pos;
+  if (pos >= msg->dgram.len) return 0;
+
+  topic->len = (size_t) (((unsigned) buf[0]) << 8 | buf[1]);
+  topic->ptr = (char *) buf + 2;
+  new_pos = pos + 2 + topic->len + (qos == NULL ? 0 : 1);
+  if ((size_t) new_pos > msg->dgram.len) return 0;
+  if (qos != NULL) *qos = buf[2 + topic->len];
+  return new_pos;
+}
+
+size_t mg_mqtt_next_sub(struct mg_mqtt_message *msg, struct mg_str *topic,
+                        uint8_t *qos, size_t pos) {
+  uint8_t tmp;
+  return mg_mqtt_next_topic(msg, topic, qos == NULL ? &tmp : qos, pos);
+}
+
+size_t mg_mqtt_next_unsub(struct mg_mqtt_message *msg, struct mg_str *topic,
+                          size_t pos) {
+  return mg_mqtt_next_topic(msg, topic, NULL, pos);
+}
+
 // Event handler function
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_MQTT_CMD) {
@@ -77,9 +103,20 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
                  mm->data.ptr, (int) mm->topic.len, mm->topic.ptr));
         for (struct sub *sub = s_subs; sub != NULL; sub = sub->next) {
           if (mg_match(mm->topic, sub->topic, NULL)) {
-            mg_mqtt_pub(sub->c, mm->topic, mm->data, 1, false);
+            struct mg_mqtt_opts pub_opts;
+            memset(&pub_opts, 0, sizeof(pub_opts));
+            pub_opts.topic = mm->topic;
+            pub_opts.message = mm->data;
+            pub_opts.qos = 1, pub_opts.retain = false;
+            mg_mqtt_pub(sub->c, &pub_opts);
           }
         }
+        break;
+      }
+      case MQTT_CMD_PINGREQ: {
+        // The server must send a PINGRESP packet in response to a PINGREQ packet [MQTT-3.12.4-1]
+        MG_INFO(("PINGREQ %p -> PINGRESP", c->fd));
+        mg_mqtt_send_header(c, MQTT_CMD_PINGRESP, 0, 0);
         break;
       }
     }

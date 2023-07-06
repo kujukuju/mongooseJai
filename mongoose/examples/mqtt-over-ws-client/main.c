@@ -7,12 +7,17 @@
 //    3. Publishes message `hello` to the `s_topic`
 //    4. Receives that message back from the subscribed topic and exits
 //
-// To enable SSL/TLS for this client, build it like this:
-//    make MBEDTLS_DIR=/path/to/your/mbedtls/installation
+// To enable SSL/TLS, see https://mongoose.ws/tutorials/tls/#how-to-build
+
+static const char *s_url = 
+#if defined(MG_ENABLE_MBEDTLS) || defined(MG_ENABLE_OPENSSL)
+  "wss://broker.hivemq.com:8884/mqtt";
+#else
+  "ws://broker.hivemq.com:8000/mqtt";
+#endif
 
 #include "mongoose.h"
 
-static const char *s_url = "ws://broker.hivemq.com:8000/mqtt";
 static const char *s_topic = "mg/test";
 
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
@@ -28,17 +33,20 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   } else if (ev == MG_EV_WS_OPEN) {
     // WS connection established. Perform MQTT login
     MG_INFO(("Connected to WS. Logging in to MQTT..."));
-    struct mg_mqtt_opts opts = {.will_qos = 1,
-                                .will_topic = mg_str(s_topic),
-                                .will_message = mg_str("goodbye")};
+    struct mg_mqtt_opts opts = {.qos = 1,
+                                .topic = mg_str(s_topic),
+                                .message = mg_str("goodbye")};
     size_t len = c->send.len;
     mg_mqtt_login(c, &opts);
     mg_ws_wrap(c, c->send.len - len, WEBSOCKET_OP_BINARY);
+    c->is_hexdumping = 1;
   } else if (ev == MG_EV_WS_MSG) {
     struct mg_mqtt_message mm;
     struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
+    uint8_t version = c->is_mqtt5 ? 5 : 4;
     MG_INFO(("GOT %d bytes WS msg", (int) wm->data.len));
-    while ((mg_mqtt_parse((uint8_t *) wm->data.ptr, wm->data.len, &mm)) == 0) {
+    while ((mg_mqtt_parse((uint8_t *) wm->data.ptr, wm->data.len, version,
+                          &mm)) == MQTT_OK) {
       switch (mm.cmd) {
         case MQTT_CMD_CONNACK:
           mg_call(c, MG_EV_MQTT_OPEN, &mm.ack);
@@ -46,11 +54,20 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
             struct mg_str topic = mg_str(s_topic), data = mg_str("hello");
             size_t len = c->send.len;
             MG_INFO(("CONNECTED to %s", s_url));
-            mg_mqtt_sub(c, topic, 1);
-            mg_ws_wrap(c, len, WEBSOCKET_OP_BINARY);
+            struct mg_mqtt_opts sub_opts;
+            memset(&sub_opts, 0, sizeof(sub_opts));
+            sub_opts.topic = topic;
+            sub_opts.qos = 1;
+            mg_mqtt_sub(c, &sub_opts);
+            len = mg_ws_wrap(c, c->send.len - len, WEBSOCKET_OP_BINARY);
             MG_INFO(("SUBSCRIBED to %.*s", (int) topic.len, topic.ptr));
-            mg_mqtt_pub(c, topic, data, 1, false);
-            MG_INFO(("PUBSLISHED %.*s -> %.*s", (int) data.len, data.ptr,
+            struct mg_mqtt_opts pub_opts;
+            memset(&pub_opts, 0, sizeof(pub_opts));
+            pub_opts.topic = topic;
+            pub_opts.message = data;
+            pub_opts.qos = 1, pub_opts.retain = false;
+            mg_mqtt_pub(c, &pub_opts);
+            MG_INFO(("PUBLISHED %.*s -> %.*s", (int) data.len, data.ptr,
                      (int) topic.len, topic.ptr));
             len = mg_ws_wrap(c, c->send.len - len, WEBSOCKET_OP_BINARY);
           } else {
@@ -78,9 +95,10 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 }
 
 int main(void) {
-  struct mg_mgr mgr;  // Event manager
-  bool done = false;  // Event handler flips it to true when done
-  mg_mgr_init(&mgr);  // Initialise event manager
+  struct mg_mgr mgr;        // Event manager
+  bool done = false;        // Event handler flips it to true when done
+  mg_mgr_init(&mgr);        // Initialise event manager
+  mg_log_set(MG_LL_DEBUG);  // Set log level
   mg_ws_connect(&mgr, s_url, fn, &done, NULL);    // Create client connection
   while (done == false) mg_mgr_poll(&mgr, 1000);  // Event loop
   mg_mgr_free(&mgr);                              // Finished, cleanup

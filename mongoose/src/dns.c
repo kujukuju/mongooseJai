@@ -1,5 +1,6 @@
 #include "dns.h"
 #include "log.h"
+#include "printf.h"
 #include "str.h"
 #include "timer.h"
 #include "url.h"
@@ -8,25 +9,24 @@
 struct dns_data {
   struct dns_data *next;
   struct mg_connection *c;
-  int64_t expire;
+  uint64_t expire;
   uint16_t txnid;
 };
-
-static struct dns_data *s_reqs;  // Active DNS requests
 
 static void mg_sendnsreq(struct mg_connection *, struct mg_str *, int,
                          struct mg_dns *, bool);
 
-static void mg_dns_free(struct dns_data *d) {
-  LIST_DELETE(struct dns_data, &s_reqs, d);
+static void mg_dns_free(struct mg_connection *c, struct dns_data *d) {
+  LIST_DELETE(struct dns_data,
+              (struct dns_data **) &c->mgr->active_dns_requests, d);
   free(d);
 }
 
 void mg_resolve_cancel(struct mg_connection *c) {
-  struct dns_data *tmp, *d;
-  for (d = s_reqs; d != NULL; d = tmp) {
+  struct dns_data *tmp, *d = (struct dns_data *) c->mgr->active_dns_requests;
+  for (; d != NULL; d = tmp) {
     tmp = d->next;
-    if (d->c == c) mg_dns_free(d);
+    if (d->c == c) mg_dns_free(c, d);
   }
 }
 
@@ -126,7 +126,7 @@ bool mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *dm) {
       break;  // Return success
     } else if (rr.alen == 16 && rr.atype == 28 && rr.aclass == 1) {
       dm->addr.is_ip6 = true;
-      memcpy(&dm->addr.ip6, &buf[ofs - 16], 16);
+      memcpy(&dm->addr.ip, &buf[ofs - 16], 16);
       dm->resolved = true;
       break;  // Return success
     }
@@ -138,8 +138,9 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
                    void *fn_data) {
   struct dns_data *d, *tmp;
   if (ev == MG_EV_POLL) {
-    int64_t now = *(int64_t *) ev_data;
-    for (d = s_reqs; d != NULL; d = tmp) {
+    uint64_t now = *(uint64_t *) ev_data;
+    for (d = (struct dns_data *) c->mgr->active_dns_requests; d != NULL;
+         d = tmp) {
       tmp = d->next;
       // MG_DEBUG ("%lu %lu dns poll", d->expire, now));
       if (now > d->expire) mg_error(d->c, "DNS timeout");
@@ -148,25 +149,25 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
     struct mg_dns_message dm;
     int resolved = 0;
     if (mg_dns_parse(c->recv.buf, c->recv.len, &dm) == false) {
-      char *s = mg_hexdump(c->recv.buf, c->recv.len);
-      MG_ERROR(("Unexpected DNS response:\n%s\n", s));
-      free(s);
+      MG_ERROR(("Unexpected DNS response:"));
+      mg_hexdump(c->recv.buf, c->recv.len);
     } else {
-      MG_VERBOSE(("%s %d", dm.name, dm.resolved));
-      for (d = s_reqs; d != NULL; d = tmp) {
+      // MG_VERBOSE(("%s %d", dm.name, dm.resolved));
+      for (d = (struct dns_data *) c->mgr->active_dns_requests; d != NULL;
+           d = tmp) {
         tmp = d->next;
         // MG_INFO(("d %p %hu %hu", d, d->txnid, dm.txnid));
         if (dm.txnid != d->txnid) continue;
         if (d->c->is_resolving) {
           if (dm.resolved) {
-            char buf[100];
             dm.addr.port = d->c->rem.port;  // Save port
             d->c->rem = dm.addr;            // Copy resolved address
-            MG_DEBUG(("%lu %s resolved to %s", d->c->id, dm.name,
-                      mg_ntoa(&d->c->rem, buf, sizeof(buf))));
+            MG_DEBUG(
+                ("%lu %s is %M", d->c->id, dm.name, mg_print_ip, &d->c->rem));
             mg_connect_resolved(d->c);
 #if MG_ENABLE_IPV6
-          } else if (dm.addr.is_ip6 == false && dm.name[0] != '\0') {
+          } else if (dm.addr.is_ip6 == false && dm.name[0] != '\0' &&
+                     c->mgr->use_dns6 == false) {
             struct mg_str x = mg_str(dm.name);
             mg_sendnsreq(d->c, &x, c->mgr->dnstimeout, &c->mgr->dns6, true);
 #endif
@@ -176,23 +177,24 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
         } else {
           MG_ERROR(("%lu already resolved", d->c->id));
         }
-        mg_dns_free(d);
+        mg_dns_free(c, d);
         resolved = 1;
       }
     }
     if (!resolved) MG_ERROR(("stray DNS reply"));
     c->recv.len = 0;
   } else if (ev == MG_EV_CLOSE) {
-    for (d = s_reqs; d != NULL; d = tmp) {
+    for (d = (struct dns_data *) c->mgr->active_dns_requests; d != NULL;
+         d = tmp) {
       tmp = d->next;
       mg_error(d->c, "DNS error");
-      mg_dns_free(d);
+      mg_dns_free(c, d);
     }
   }
   (void) fn_data;
 }
 
-static void mg_dns_send(struct mg_connection *c, const struct mg_str *name,
+static bool mg_dns_send(struct mg_connection *c, const struct mg_str *name,
                         uint16_t txnid, bool ipv6) {
   struct {
     struct mg_dns_header header;
@@ -216,14 +218,7 @@ static void mg_dns_send(struct mg_connection *c, const struct mg_str *name,
   if (ipv6) pkt.data[n - 3] = 0x1c;  // AAAA query
   // memcpy(&pkt.data[n], "\xc0\x0c\x00\x1c\x00\x01", 6);  // AAAA query
   // n += 6;
-  mg_send(c, &pkt, sizeof(pkt.header) + n);
-#if 0
-  // Immediately after A query, send AAAA query. Whatever reply comes first,
-  // we'll use it. Note: we cannot send two queries in a single packet.
-  // https://stackoverflow.com/questions/4082081/requesting-a-and-aaaa-records-in-single-dns-query
-  pkt.data[n - 3] = 0x1c;  // AAAA query
-  mg_send(c, &pkt, sizeof(pkt.header) + n);
-#endif
+  return mg_send(c, &pkt, sizeof(pkt.header) + n);
 }
 
 static void mg_sendnsreq(struct mg_connection *c, struct mg_str *name, int ms,
@@ -243,16 +238,18 @@ static void mg_sendnsreq(struct mg_connection *c, struct mg_str *name, int ms,
   } else if ((d = (struct dns_data *) calloc(1, sizeof(*d))) == NULL) {
     mg_error(c, "resolve OOM");
   } else {
-    char buf[100];
-    d->txnid = s_reqs ? (uint16_t) (s_reqs->txnid + 1) : 1;
-    d->next = s_reqs;
-    s_reqs = d;
-    d->expire = mg_millis() + (int64_t) ms;
+    struct dns_data *reqs = (struct dns_data *) c->mgr->active_dns_requests;
+    d->txnid = reqs ? (uint16_t) (reqs->txnid + 1) : 1;
+    d->next = (struct dns_data *) c->mgr->active_dns_requests;
+    c->mgr->active_dns_requests = d;
+    d->expire = mg_millis() + (uint64_t) ms;
     d->c = c;
     c->is_resolving = 1;
     MG_VERBOSE(("%lu resolving %.*s @ %s, txnid %hu", c->id, (int) name->len,
-                name->ptr, mg_ntoa(&dnsc->c->rem, buf, sizeof(buf)), d->txnid));
-    mg_dns_send(dnsc->c, name, d->txnid, ipv6);
+                name->ptr, dnsc->url, d->txnid));
+    if (!mg_dns_send(dnsc->c, name, d->txnid, ipv6)) {
+      mg_error(dnsc->c, "DNS send");
+    }
   }
 }
 
@@ -264,6 +261,7 @@ void mg_resolve(struct mg_connection *c, const char *url) {
     mg_connect_resolved(c);
   } else {
     // host is not an IP, send DNS resolution request
-    mg_sendnsreq(c, &host, c->mgr->dnstimeout, &c->mgr->dns4, false);
+    struct mg_dns *dns = c->mgr->use_dns6 ? &c->mgr->dns6 : &c->mgr->dns4;
+    mg_sendnsreq(c, &host, c->mgr->dnstimeout, dns, c->mgr->use_dns6);
   }
 }

@@ -1,5 +1,5 @@
 #include "fs.h"
-#include "util.h"
+#include "printf.h"
 
 struct mg_fd *mg_fs_open(struct mg_fs *fs, const char *path, int flags) {
   struct mg_fd *fd = (struct mg_fd *) calloc(1, sizeof(*fd));
@@ -62,14 +62,13 @@ bool mg_file_write(struct mg_fs *fs, const char *path, const void *buf,
 }
 
 bool mg_file_printf(struct mg_fs *fs, const char *path, const char *fmt, ...) {
-  char tmp[256], *buf = tmp;
-  bool result;
-  size_t len;
   va_list ap;
+  char *data;
+  bool result = false;
   va_start(ap, fmt);
-  len = mg_vasprintf(&buf, sizeof(tmp), fmt, ap);
+  data = mg_vmprintf(fmt, &ap);
   va_end(ap);
-  result = mg_file_write(fs, path, buf, len > 0 ? (size_t) len : 0);
-  if (buf != tmp) free(buf);
+  result = mg_file_write(fs, path, data, strlen(data));
+  free(data);
   return result;
 }

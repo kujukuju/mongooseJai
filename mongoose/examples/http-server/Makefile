@@ -1,27 +1,26 @@
-PROG ?= example
-ROOT ?= $(realpath $(CURDIR)/../..)
-DEFS ?= -DMG_ENABLE_LINES=1
-CFLAGS ?= -I../.. -W -Wall -DMG_ENABLE_IPV6=1 $(DEFS) $(EXTRA)
-VCFLAGS = /nologo /W3 /O2 /I../.. $(DEFS) $(EXTRA) /link /incremental:no /machine:IX86
-VC98 = docker run -it --rm -e Tmp=. -v $(ROOT):$(ROOT) -w $(CURDIR) mdashnet/vc98
-LIN = docker run -it --rm -v $(ROOT):$(ROOT) -w $(CURDIR) mdashnet/cc2
+PROG ?= example                   # Program we are building
+DELETE = rm -rf                   # Command to remove files
+OUT ?= -o $(PROG)                 # Compiler argument for output file
+SOURCES = main.c mongoose.c       # Source code files
+CFLAGS = -W -Wall -Wextra -g -I.  # Build options
 
-all: $(PROG)
-	$(DEBUGGER) ./$(PROG) $(ARGS)
+# Mongoose build options. See https://mongoose.ws/documentation/#build-options
+CFLAGS_MONGOOSE += -DMG_HTTP_DIRLIST_TIME_FMT="%Y/%m/%d %H:%M:%S"
+CFLAGS_MONGOOSE += -DMG_ENABLE_LINES=1 -DMG_ENABLE_IPV6=1 -DMG_ENABLE_SSI=1
 
-$(PROG): main.c Makefile
-	$(CC) ../../mongoose.c main.c -I../.. $(CFLAGS) -o $@
+ifeq ($(OS),Windows_NT)   # Windows settings. Assume MinGW compiler. To use VC: make CC=cl CFLAGS=/MD OUT=/Feprog.exe
+  PROG ?= example.exe           # Use .exe suffix for the binary
+  CC = gcc                      # Use MinGW gcc compiler
+  CFLAGS += -lws2_32            # Link against Winsock library
+  DELETE = cmd /C del /Q /F /S  # Command prompt command to delete files
+  OUT ?= -o $(PROG)             # Build output
+endif
 
-mongoose.exe: main.c
-	$(VC98) wine cl ../../mongoose.c main.c $(VCFLAGS) ws2_32.lib /out:$@
+all: $(PROG)              # Default target. Build and run program
+	$(RUN) ./$(PROG) $(ARGS)
 
-mingw:
-	gcc ../../mongoose.c main.c -I../.. -W -Wall -DMG_ENABLE_IPV6=1 -DMG_ENABLE_LINES=1 -D_POSIX_C_SOURCE=200000L -lws2_32 -o mongoose.exe
+$(PROG): $(SOURCES)       # Build program from sources
+	$(CC) $(SOURCES) $(CFLAGS) $(CFLAGS_MONGOOSE) $(CFLAGS_EXTRA) $(OUT)
 
-linux: all
-linux: CFLAGS += -O2 -fsanitize=address,undefined,shift,null,return,bounds,alignment,object-size,bool,enum -static-libasan
-#linux: CC = $(LIN) cc
-#linux: DEBUGGER = $(LIN)
-
-clean:
-	rm -rf $(PROG) *.o *.dSYM *.gcov *.gcno *.gcda *.obj *.exe *.ilk *.pdb mongoose mongoose_* mongoose.*
+clean:                    # Cleanup. Delete built program and all build artifacts
+	$(DELETE) $(PROG) *.o *.obj *.exe *.dSYM

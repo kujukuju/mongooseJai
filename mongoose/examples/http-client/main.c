@@ -5,24 +5,22 @@
 // print the response and exit.
 // You can change `s_url` from the command line by executing: ./example YOUR_URL
 //
-// To enable SSL/TLS for this client, build it like this:
-//    make MBEDTLS=/path/to/your/mbedtls/installation
-//    make OPENSSL=/path/to/your/openssl/installation
+// To enable SSL/TLS, , see https://mongoose.ws/tutorials/tls/#how-to-build
 
 #include "mongoose.h"
 
 // The very first web page in history. You can replace it from command line
 static const char *s_url = "http://info.cern.ch/";
-static const char *s_post_data = NULL;     // POST data
-static const int64_t s_timeout_ms = 1500;  // Connect timeout in milliseconds
+static const char *s_post_data = NULL;      // POST data
+static const uint64_t s_timeout_ms = 1500;  // Connect timeout in milliseconds
 
 // Print HTTP response and signal that we're done
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_OPEN) {
-    // Connection created. Store connect expiration time in c->label
-    *(int64_t *) c->label = mg_millis() + s_timeout_ms;
+    // Connection created. Store connect expiration time in c->data
+    *(uint64_t *) c->data = mg_millis() + s_timeout_ms;
   } else if (ev == MG_EV_POLL) {
-    if (mg_millis() > *(int64_t *) c->label &&
+    if (mg_millis() > *(uint64_t *) c->data &&
         (c->is_connecting || c->is_resolving)) {
       mg_error(c, "Connect timeout");
     }
@@ -59,13 +57,16 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 }
 
 int main(int argc, char *argv[]) {
+  const char *log_level = getenv("LOG_LEVEL");  // Allow user to set log level
+  if (log_level == NULL) log_level = "4";       // Default is verbose
+
   struct mg_mgr mgr;              // Event manager
   bool done = false;              // Event handler flips it to true
   if (argc > 1) s_url = argv[1];  // Use URL provided in the command line
-  mg_log_set("4");                // Set to 0 to disable debug
+  mg_log_set(atoi(log_level));    // Set to 0 to disable debug
   mg_mgr_init(&mgr);              // Initialise event manager
   mg_http_connect(&mgr, s_url, fn, &done);  // Create client connection
-  while (!done) mg_mgr_poll(&mgr, 50);      // Infinite event loop
+  while (!done) mg_mgr_poll(&mgr, 50);      // Event manager loops until 'done'
   mg_mgr_free(&mgr);                        // Free resources
   return 0;
 }
