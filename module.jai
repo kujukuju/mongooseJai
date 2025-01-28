@@ -8,24 +8,24 @@
 }
 
 mg_listening_bit :: enum_flags u32 {
-    is_client :: 1;
-    is_accepted;
-    is_resolving;
-    is_arplooking;
-    is_connecting;
-    is_tls;
-    is_tls_hs;
-    is_udp;
-    is_websocket;
-    is_mqtt5;
-    is_hexdumping;
-    is_draining;
-    is_closing;
-    is_full;
-    is_resp;
-    is_readable;
-    is_writable;
-    is_io_err;
+    is_client :: 1 << 31;
+    is_accepted :: 1 << 30;
+    is_resolving :: 1 << 29;
+    is_arplooking :: 1 << 29;
+    is_connecting :: 1 << 27;
+    is_tls :: 1 << 26;
+    is_tls_hs :: 1 << 25;
+    is_udp :: 1 << 24;
+    is_websocket :: 1 << 23;
+    is_mqtt5 :: 1 << 22;
+    is_hexdumping :: 1 << 21;
+    is_draining :: 1 << 20;
+    is_closing :: 1 << 19;
+    is_full :: 1 << 18;
+    is_resp :: 1 << 17;
+    is_readable :: 1 << 16;
+    is_writable :: 1 << 15;
+    is_io_err :: 1 << 14;
 }
 
 get_connection_state :: (connection: *mg_connection, listening_bit: mg_listening_bit) -> bool {

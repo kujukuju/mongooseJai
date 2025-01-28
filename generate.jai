@@ -19,9 +19,14 @@
         #assert false "Unknown OS.\n";
     }
 
+    array_add(*include_paths, tprint("%mongoose/", #filepath));
+    array_add(*include_paths, tprint("%mongoose/mongoose-7.16/", #filepath));
+
     // array_add(*include_paths, tprint("%mongoose/", #filepath));
     array_add(*source_files, tprint("%mongoose/mongoose-7.16/mongoose.c", #filepath));
     array_add(*source_files, tprint("%mongoose/mongoose-7.16/mongoose.h", #filepath));
+    array_add(*source_files, tprint("%mongoose/helper.c", #filepath));
+    array_add(*source_files, tprint("%mongoose/helper.h", #filepath));
 
     array_add(*extra_clang_arguments, "-Wno-error=implicit-int -DMG_ENABLE_OPENSSL=1 -lssl -lcrypto");
     array_add(*extra_clang_arguments, "-x", "c");
@@ -35,8 +40,23 @@
     }
 
     #if OS == .WINDOWS {
+        footer = #string ___jai
+time_t :: s64;
+va_list :: *void;
+
+Socket :: #import "Socket";
+SOCKET :: Socket.SOCKET;
+sockaddr_in :: Socket.sockaddr_in;
+sockaddr :: Socket.sockaddr;
+
+#import "Windows";
+        ___jai
+
         generate_bindings(opts, "module_windows.jai");
     } else #if OS == .LINUX {
+        footer = #string ___jai
+        ___jai
+
         generate_bindings(opts, "module_linux.jai");
     }
 }

@@ -27,6 +27,8 @@ MG_ARCH_ARMCGT :: 15;
 
 MG_ARCH :: MG_ARCH_WIN32;
 
+// MG_BIG_ENDIAN :: *cast(*u16) "\0\xff" < 0x100;
+
 MG_ENABLE_DIRLIST :: 1;
 
 SIGPIPE :: 0;
@@ -1416,22 +1418,19 @@ MG_PHY_2 :: enum s32 {
     MG_PHY_RTL8201_REG_PAGESEL :: RTL8201_REG_PAGESEL;
 }
 
+mg_set_log_level :: (level: s32) -> void #foreign mongoose;
+
 #scope_file
 
-// only mostly sure about this
-// I think linux is u32?
-// SOCKET :: *void;
+#import "Basic"; // For push_context
 
+mongoose :: #library "bin/win/mongoose";
 time_t :: s64;
 va_list :: *void;
 
-#import "Basic"; // For push_context
 Socket :: #import "Socket";
 SOCKET :: Socket.SOCKET;
 sockaddr_in :: Socket.sockaddr_in;
 sockaddr :: Socket.sockaddr;
 
-
 #import "Windows";
-
-mongoose :: #library "bin/win/mongoose";
