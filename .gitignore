@@ -1,4 +1,6 @@
 build/
 mongoose/cmake-*
-.idea/
+mongoose-old/
+mongoose/.idea/
+mongoose/build/
 .build/
